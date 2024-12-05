@@ -3,7 +3,9 @@ mod ntfs;
 mod style;
 
 use clap::Parser;
+use env_logger::Env;
 use index::Index;
+use log::info;
 use memchr::memmem::FinderRev;
 use ntfs::Volume;
 use nu_ansi_term::Color;
@@ -21,12 +23,21 @@ struct Args {
 
     #[arg(long, help = "要搜索的盘")]
     volume: Option<Vec<String>>,
+
+    #[arg(long, help = "默认日志等级设为debug")]
+    verbose: bool,
 }
 
 fn main() {
     let mut args = Args::parse();
     // 忽略大小写
     args.input = args.input.map(|s| s.to_ascii_lowercase());
+
+    if args.verbose {
+        env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    } else {
+        env_logger::init();
+    }
 
     let mut indices = Vec::new();
     // 根据输入判断是否为一次性查找
@@ -36,6 +47,7 @@ fn main() {
         let volume = Volume::new(&name).unwrap();
         let mut index = Index::with_capacity(100000);
         let mut frns = Vec::new();
+        let mut count = 0; // 记录遍历的日志数量
         for record in volume.iter_usn_record(4 * 1024 * 1024) {
             if let Some(finder) = &finder {
                 if finder.rfind(record.filename.as_bytes()).is_some() {
@@ -43,8 +55,10 @@ fn main() {
                 }
             }
             index.set(record);
+            count += 1;
         }
 
+        info!("索引{}盘USN日志{}条", name, count);
         indices.push((name, index));
         res.push(frns);
     }
@@ -56,7 +70,7 @@ fn main() {
     }
     let style = Color::LightRed.bold();
 
-    // 一次性查询，提前返回
+    // 一次性查找，提前返回
     if let Some(finder) = finder {
         let mut lock = stdout().lock();
         for (frns, (volume, index)) in res.into_iter().zip(indices) {
@@ -73,7 +87,7 @@ fn main() {
         return;
     }
 
-    // 进入持久化查询
+    // 进入持久化查找
     let stdin = stdin();
     let mut stdout = stdout();
     let mut buf = String::new();
@@ -103,6 +117,7 @@ fn main() {
                     }
                 }
             }
+            info!("查找{}盘索引{}条", volume, index.len());
         }
     }
 }

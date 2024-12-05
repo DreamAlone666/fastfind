@@ -21,6 +21,10 @@ impl Index {
         }
         res
     }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl IntoIterator for Index {
