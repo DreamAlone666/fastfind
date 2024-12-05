@@ -7,17 +7,17 @@ use index::Index;
 use memchr::memmem::{Finder, FinderRev};
 use ntfs::Volume;
 use nu_ansi_term::Color;
-use style::Styled;
 use std::io::{stdin, stdout, Write};
+use style::Styled;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long, help = "一次性查询")]
     input: Option<String>,
-    
+
     #[arg(long, help = "不使用彩色输出")]
-    nocolor: bool
+    nocolor: bool,
 }
 
 fn main() {
@@ -46,7 +46,6 @@ fn main() {
         res.push(frns);
     }
 
-    
     if !args.nocolor {
         // Note for Windows 10 users: On Windows 10,
         // the application must enable ANSI support first:
@@ -58,7 +57,7 @@ fn main() {
     if let Some(finder) = finder {
         let rfinder = match args.nocolor {
             false => Some(FinderRev::new(finder.needle())),
-            true => None
+            true => None,
         };
         let mut lock = stdout().lock();
         for (frns, (volume, index)) in res.into_iter().zip(indices) {
@@ -67,8 +66,7 @@ fn main() {
                 if let Some(rfinder) = &rfinder {
                     let styled = Styled::new(&style, &name, rfinder);
                     writeln!(lock, "{}{}", volume, styled).unwrap();
-                }
-                else {
+                } else {
                     writeln!(lock, "{}{}", volume, name).unwrap();
                 }
             }
@@ -84,7 +82,7 @@ fn main() {
         let prompt = "[ffd]> ";
         match args.nocolor {
             true => print!("{}", prompt),
-            false => print!("{}", Color::LightGreen.bold().paint(prompt))
+            false => print!("{}", Color::LightGreen.bold().paint(prompt)),
         }
         stdout.flush().unwrap();
 
@@ -95,7 +93,7 @@ fn main() {
         let finder = Finder::new(buf.trim());
         let rfinder = match args.nocolor {
             false => Some(FinderRev::new(finder.needle())),
-            true => None
+            true => None,
         };
         let mut lock = stdout.lock();
         for (volume, index) in &indices {
@@ -105,8 +103,7 @@ fn main() {
                     if let Some(rfinder) = &rfinder {
                         let styled = Styled::new(&style, &name, rfinder);
                         writeln!(lock, "{}{}", volume, styled).unwrap();
-                    }
-                    else {
+                    } else {
                         writeln!(lock, "{}{}", volume, name).unwrap();
                     }
                 }
@@ -114,21 +111,3 @@ fn main() {
         }
     }
 }
-
-// /// 高亮颜色支持
-// fn styled(s: String, finder: &Finder) -> String {
-//     let s = s.into_bytes();
-//     let style = Color::LightRed.bold();
-//     let prefix = style.prefix().to_string().into_bytes();
-//     let suffix = style.suffix().to_string().into_bytes();
-//     let len = finder.needle().len();
-//     let mut res: Vec<u8> = Vec::with_capacity(s.len() + prefix.len() + suffix.len());
-//     if let Some(i) = finder.find(&s) {
-//         res.extend(&s[..i]);
-//         res.extend(prefix);
-//         res.extend(&s[i..i + len]);
-//         res.extend(suffix);
-//         res.extend(&s[i + len..]);
-//     }
-//     unsafe { String::from_utf8_unchecked(res) }
-// }
