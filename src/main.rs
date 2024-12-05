@@ -4,7 +4,7 @@ mod style;
 
 use clap::Parser;
 use index::Index;
-use memchr::memmem::{Finder, FinderRev};
+use memchr::memmem::FinderRev;
 use ntfs::Volume;
 use nu_ansi_term::Color;
 use std::io::{stdin, stdout, Write};
@@ -18,6 +18,9 @@ struct Args {
 
     #[arg(long, help = "不使用彩色输出")]
     nocolor: bool,
+
+    #[arg(long, help = "要搜索的盘")]
+    volume: Option<Vec<String>>,
 }
 
 fn main() {
@@ -27,15 +30,15 @@ fn main() {
 
     let mut indices = Vec::new();
     // 根据输入判断是否为一次性查找
-    let finder = args.input.as_ref().map(|input| Finder::new(input));
+    let finder = args.input.as_ref().map(|input| FinderRev::new(input));
     let mut res = Vec::new();
-    for name in Volume::names() {
+    for name in args.volume.unwrap_or_else(Volume::names) {
         let volume = Volume::new(&name).unwrap();
         let mut index = Index::with_capacity(100000);
         let mut frns = Vec::new();
         for record in volume.iter_usn_record(4 * 1024 * 1024) {
             if let Some(finder) = &finder {
-                if finder.find(record.filename.as_bytes()).is_some() {
+                if finder.rfind(record.filename.as_bytes()).is_some() {
                     frns.push(record.frn);
                 }
             }
@@ -55,19 +58,15 @@ fn main() {
 
     // 一次性查询，提前返回
     if let Some(finder) = finder {
-        let rfinder = match args.nocolor {
-            false => Some(FinderRev::new(finder.needle())),
-            true => None,
-        };
         let mut lock = stdout().lock();
         for (frns, (volume, index)) in res.into_iter().zip(indices) {
             for frn in frns {
                 let name = index.full_name(frn);
-                if let Some(rfinder) = &rfinder {
-                    let styled = Styled::new(&style, &name, rfinder);
-                    writeln!(lock, "{}{}", volume, styled).unwrap();
-                } else {
+                if args.nocolor {
                     writeln!(lock, "{}{}", volume, name).unwrap();
+                } else {
+                    let styled = Styled::new(&style, &name, &finder);
+                    writeln!(lock, "{}{}", volume, styled).unwrap();
                 }
             }
         }
@@ -90,21 +89,17 @@ fn main() {
         stdin.read_line(&mut buf).unwrap();
         buf.make_ascii_lowercase();
 
-        let finder = Finder::new(buf.trim());
-        let rfinder = match args.nocolor {
-            false => Some(FinderRev::new(finder.needle())),
-            true => None,
-        };
+        let finder = FinderRev::new(buf.trim());
         let mut lock = stdout.lock();
         for (volume, index) in &indices {
             for (&frn, (_, name)) in index {
-                if finder.find(name.to_ascii_lowercase().as_bytes()).is_some() {
+                if finder.rfind(name.to_ascii_lowercase().as_bytes()).is_some() {
                     let name = index.full_name(frn);
-                    if let Some(rfinder) = &rfinder {
-                        let styled = Styled::new(&style, &name, rfinder);
-                        writeln!(lock, "{}{}", volume, styled).unwrap();
-                    } else {
+                    if args.nocolor {
                         writeln!(lock, "{}{}", volume, name).unwrap();
+                    } else {
+                        let styled = Styled::new(&style, &name, &finder);
+                        writeln!(lock, "{}{}", volume, styled).unwrap();
                     }
                 }
             }
