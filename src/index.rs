@@ -1,46 +1,65 @@
 use crate::ntfs::USNRecord;
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap, path::MAIN_SEPARATOR_STR};
 
-pub struct Index(HashMap<u64, (u64, String)>);
+type Map = HashMap<u64, (u64, Box<str>)>;
+
+pub struct Index {
+    letter: Box<str>,
+    map: Map,
+}
 
 impl Index {
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self(HashMap::with_capacity(capacity))
+    pub fn with_capacity(letter: Cow<str>, capacity: usize) -> Self {
+        Self {
+            letter: letter.into(),
+            map: HashMap::with_capacity(capacity),
+        }
     }
 
-    pub fn set(&mut self, record: USNRecord) {
-        self.0
-            .insert(record.frn, (record.parent_frn, record.filename));
+    pub fn insert(&mut self, record: USNRecord) {
+        self.map
+            .insert(record.frn, (record.parent_frn, record.filename.into()));
     }
 
-    pub fn full_name(&self, mut frn: u64) -> String {
-        let mut res = String::new();
-        while let Some((parent_frn, name)) = self.0.get(&frn) {
-            res = r"\".to_string() + name + &res;
+    pub fn get_path(&self, mut frn: u64) -> Option<String> {
+        let mut parts = Vec::new();
+        while let Some((parent_frn, name)) = self.map.get(&frn) {
+            parts.push(name.as_ref());
             frn = *parent_frn;
         }
-        res
+
+        if parts.is_empty() {
+            return None;
+        }
+
+        parts.push(&self.letter);
+        parts.reverse();
+        Some(parts.join(MAIN_SEPARATOR_STR))
     }
 
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.map.len()
+    }
+
+    pub fn letter(&self) -> &str {
+        &self.letter
     }
 }
 
 impl IntoIterator for Index {
-    type Item = <HashMap<u64, (u64, String)> as IntoIterator>::Item;
-    type IntoIter = <HashMap<u64, (u64, String)> as IntoIterator>::IntoIter;
+    type Item = <Map as IntoIterator>::Item;
+    type IntoIter = <Map as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.map.into_iter()
     }
 }
 
 impl<'a> IntoIterator for &'a Index {
-    type Item = <&'a HashMap<u64, (u64, String)> as IntoIterator>::Item;
-    type IntoIter = <&'a HashMap<u64, (u64, String)> as IntoIterator>::IntoIter;
+    type Item = <&'a Map as IntoIterator>::Item;
+    type IntoIter = <&'a Map as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
+        self.map.iter()
     }
 }

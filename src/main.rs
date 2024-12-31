@@ -45,7 +45,7 @@ fn main() {
     let mut res = Vec::new();
     for name in args.volume.unwrap_or_else(Volume::names) {
         let volume = Volume::new(&name).unwrap();
-        let mut index = Index::with_capacity(100000);
+        let mut index = Index::with_capacity(name.into(), 100000);
         let mut frns = Vec::new();
         let mut count = 0; // 记录遍历的日志数量
         for record in volume.iter_usn_record(4 * 1024 * 1024) {
@@ -54,12 +54,12 @@ fn main() {
                     frns.push(record.frn);
                 }
             }
-            index.set(record);
+            index.insert(record);
             count += 1;
         }
 
-        info!("索引{}盘USN日志{}条", name, count);
-        indices.push((name, index));
+        info!("索引{}盘USN日志{}条", index.letter(), count);
+        indices.push(index);
         res.push(frns);
     }
 
@@ -73,14 +73,14 @@ fn main() {
     // 一次性查找，提前返回
     if let Some(finder) = finder {
         let mut lock = stdout().lock();
-        for (frns, (volume, index)) in res.into_iter().zip(indices) {
+        for (frns, index) in res.into_iter().zip(indices) {
             for frn in frns {
-                let name = index.full_name(frn);
+                let name = index.get_path(frn).unwrap();
                 if args.nocolor {
-                    writeln!(lock, "{}{}", volume, name).unwrap();
+                    writeln!(lock, "{}", name).unwrap();
                 } else {
                     let styled = Styled::new(&style, &name, &finder);
-                    writeln!(lock, "{}{}", volume, styled).unwrap();
+                    writeln!(lock, "{}", styled).unwrap();
                 }
             }
         }
@@ -105,19 +105,19 @@ fn main() {
 
         let finder = FinderRev::new(buf.trim());
         let mut lock = stdout.lock();
-        for (volume, index) in &indices {
+        for index in &indices {
             for (&frn, (_, name)) in index {
                 if finder.rfind(name.to_ascii_lowercase().as_bytes()).is_some() {
-                    let name = index.full_name(frn);
+                    let name = index.get_path(frn).unwrap();
                     if args.nocolor {
-                        writeln!(lock, "{}{}", volume, name).unwrap();
+                        writeln!(lock, "{}", name).unwrap();
                     } else {
                         let styled = Styled::new(&style, &name, &finder);
-                        writeln!(lock, "{}{}", volume, styled).unwrap();
+                        writeln!(lock, "{}", styled).unwrap();
                     }
                 }
             }
-            info!("查找{}盘索引{}条", volume, index.len());
+            info!("查找{}盘索引{}条", index.letter(), index.len());
         }
     }
 }
