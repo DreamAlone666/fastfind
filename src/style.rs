@@ -1,17 +1,21 @@
+use core::str;
 use memchr::memmem::FinderRev;
 use nu_ansi_term::Style;
-use core::str;
 use std::fmt::Display;
 
 pub struct Styled<'a> {
     style: &'a Style,
     origin: &'a str,
-    finder: &'a FinderRev<'a>
+    finder: &'a FinderRev<'a>,
 }
 
 impl<'a> Styled<'a> {
     pub fn new(style: &'a Style, origin: &'a str, finder: &'a FinderRev<'a>) -> Self {
-        Self { style, origin, finder }
+        Self {
+            style,
+            origin,
+            finder,
+        }
     }
 }
 
@@ -25,9 +29,9 @@ impl<'a> Display for Styled<'a> {
                 "{}{}{}{}{}",
                 &self.origin[..i],
                 self.style.prefix(),
-                &self.origin[i..i+len],
+                &self.origin[i..i + len],
                 self.style.suffix(),
-                &self.origin[i+len..],
+                &self.origin[i + len..],
             );
         }
 
