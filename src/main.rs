@@ -45,7 +45,7 @@ fn main() {
     let mut res = Vec::new();
     for name in args.volume.unwrap_or_else(Volume::names) {
         let volume = Volume::new(&name).unwrap();
-        let mut index = Index::with_capacity(name.into(), 100000);
+        let mut index = Index::with_capacity(name, 100000);
         let mut frns = Vec::new();
         let mut count = 0; // 记录遍历的日志数量
         for record in volume.iter_usn_record(4 * 1024 * 1024) {

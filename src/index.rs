@@ -1,17 +1,17 @@
 use crate::ntfs::USNRecord;
-use std::{borrow::Cow, collections::HashMap, path::MAIN_SEPARATOR_STR};
+use std::{collections::HashMap, path::MAIN_SEPARATOR_STR};
 
 type Map = HashMap<u64, (u64, Box<str>)>;
 
 pub struct Index {
-    letter: Box<str>,
+    letter: String,
     map: Map,
 }
 
 impl Index {
-    pub fn with_capacity(letter: Cow<str>, capacity: usize) -> Self {
+    pub fn with_capacity(letter: String, capacity: usize) -> Self {
         Self {
-            letter: letter.into(),
+            letter: letter,
             map: HashMap::with_capacity(capacity),
         }
     }
