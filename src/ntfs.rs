@@ -3,7 +3,7 @@ use std::{
     ffi::{c_void, OsStr},
     iter::once,
     os::windows::ffi::OsStrExt,
-    ptr::{self, slice_from_raw_parts},
+    ptr, slice,
 };
 use windows::{
     core::{Owned, PCWSTR},
@@ -28,13 +28,14 @@ pub struct USNRecord {
     pub frn: u64,
     pub parent_frn: u64,
     pub filename: String,
+    length: u32,
 }
 pub struct IterUSNRecord {
     handle: HANDLE,
     in_buf: MFT_ENUM_DATA_V1,
     out_buf: Vec<u8>,
     left_bytes: u32,
-    ptr: *const u8,
+    ptr: *const USN_RECORD_V2,
 }
 
 fn get_fs(name: &str) -> Result<String> {
@@ -124,17 +125,16 @@ impl Volume {
 
 impl USNRecord {
     unsafe fn from_raw(ptr: *const USN_RECORD_V2) -> Self {
-        let record = ptr.as_ref().unwrap();
-        let filename_ptr = (ptr as *const u8).add(record.FileNameOffset.into());
-        let filename_ptr = slice_from_raw_parts(
-            filename_ptr as *const u16,
+        let record = &*ptr;
+        let filename = slice::from_raw_parts(
+            ptr.byte_add(record.FileNameOffset.into()) as *const u16,
             (record.FileNameLength / 2).into(),
         );
-        let filename = filename_ptr.as_ref().unwrap();
         Self {
             filename: String::from_utf16_lossy(filename),
             frn: record.FileReferenceNumber,
             parent_frn: record.ParentFileReferenceNumber,
+            length: record.RecordLength,
         }
     }
 }
@@ -168,30 +168,28 @@ impl Iterator for IterUSNRecord {
                     FSCTL_ENUM_USN_DATA,
                     // 直接转成空指针似乎不行，要转两次
                     Some(&self.in_buf as *const _ as *const c_void),
-                    size_of_val(&self.in_buf) as u32,
+                    size_of_val(&self.in_buf) as _,
                     Some(self.out_buf.as_mut_ptr() as *mut c_void),
-                    size_of_val(self.out_buf.as_slice()) as u32,
-                    Some(&mut self.left_bytes as *mut _),
+                    size_of_val(self.out_buf.as_slice()) as _,
+                    Some(&mut self.left_bytes),
                     None,
                 );
 
                 if res.is_err() {
                     return None;
                 }
-                // 缓冲区最前头是一个u64(之前出bug成u32了?)数，后面跟着尽可能多的USN记录
-                self.ptr = self.out_buf.as_ptr();
-                let next = *(self.ptr as *const u64);
-                self.in_buf.StartFileReferenceNumber = next.into();
-                self.ptr = self.ptr.add(size_of::<u64>());
+                // 缓冲区最前头是一个u64数，后面跟着尽可能多的USN记录
+                let ptr = self.out_buf.as_ptr();
+                self.in_buf.StartFileReferenceNumber = *(ptr as *const u64);
+                self.ptr = ptr.byte_add(size_of::<u64>()) as _;
                 self.left_bytes -= size_of::<u64>() as u32;
             }
 
             if self.left_bytes > 0 {
-                let ptr = self.ptr as *const USN_RECORD_V2;
-                let record = ptr.as_ref().unwrap();
-                self.ptr = self.ptr.add(record.RecordLength as usize);
-                self.left_bytes -= record.RecordLength;
-                return Some(USNRecord::from_raw(ptr));
+                let record = USNRecord::from_raw(self.ptr);
+                self.ptr = self.ptr.byte_add(record.length as _);
+                self.left_bytes -= record.length;
+                return Some(record);
             }
         }
 
