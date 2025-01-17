@@ -24,13 +24,13 @@ use windows::{
 // https://github.com/microsoft/windows-rs/pull/3013
 // 通过Drop自动释放HANDLE
 pub struct Volume(Owned<HANDLE>);
-pub struct USNRecord {
+pub struct UsnRecord {
     pub frn: u64,
     pub parent_frn: u64,
     pub filename: String,
     length: u32,
 }
-pub struct IterUSNRecord {
+pub struct IterUsnRecord {
     handle: HANDLE,
     in_buf: MFT_ENUM_DATA_V1,
     out_buf: Vec<u8>,
@@ -118,12 +118,12 @@ impl Volume {
         res
     }
 
-    pub fn iter_usn_record(&self, buffer_size: usize) -> IterUSNRecord {
-        IterUSNRecord::new(*self.0, buffer_size)
+    pub fn iter_usn_record(&self, buffer_size: usize) -> IterUsnRecord {
+        IterUsnRecord::new(*self.0, buffer_size)
     }
 }
 
-impl USNRecord {
+impl UsnRecord {
     unsafe fn from_raw(ptr: *const USN_RECORD_V2) -> Self {
         let record = &*ptr;
         let filename = slice::from_raw_parts(
@@ -139,7 +139,7 @@ impl USNRecord {
     }
 }
 
-impl IterUSNRecord {
+impl IterUsnRecord {
     fn new(handle: HANDLE, buffer: usize) -> Self {
         Self {
             handle,
@@ -157,8 +157,8 @@ impl IterUSNRecord {
     }
 }
 
-impl Iterator for IterUSNRecord {
-    type Item = USNRecord;
+impl Iterator for IterUsnRecord {
+    type Item = UsnRecord;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
@@ -186,7 +186,7 @@ impl Iterator for IterUSNRecord {
             }
 
             if self.left_bytes > 0 {
-                let record = USNRecord::from_raw(self.ptr);
+                let record = UsnRecord::from_raw(self.ptr);
                 self.ptr = self.ptr.byte_add(record.length as _);
                 self.left_bytes -= record.length;
                 return Some(record);

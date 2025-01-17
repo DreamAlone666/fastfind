@@ -1,4 +1,4 @@
-use crate::ntfs::USNRecord;
+use crate::ntfs::UsnRecord;
 use std::{collections::HashMap, path::MAIN_SEPARATOR_STR};
 
 type Map = HashMap<u64, (u64, Box<str>)>;
@@ -16,7 +16,7 @@ impl Index {
         }
     }
 
-    pub fn insert(&mut self, record: USNRecord) {
+    pub fn insert(&mut self, record: UsnRecord) {
         self.map
             .insert(record.frn, (record.parent_frn, record.filename.into()));
     }
