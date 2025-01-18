@@ -4,12 +4,13 @@ mod style;
 
 use clap::Parser;
 use env_logger::Env;
-use index::Index;
-use log::info;
+use log::{error, info};
 use memchr::memmem::FinderRev;
-use ntfs::Volume;
 use nu_ansi_term::Color;
 use std::io::{stdin, stdout, Write};
+
+use index::Index;
+use ntfs::Volume;
 use style::Styled;
 
 #[derive(Debug, Parser)]
@@ -42,10 +43,23 @@ fn main() {
     let mut indices = Vec::new();
     // 根据输入判断是否为一次性查找
     let finder = args.input.as_ref().map(|input| FinderRev::new(input));
+    let volumes = args.volume.map_or_else(Volume::new_drivers, |x| {
+        x.into_iter().map(|drv| Volume::from_driver(drv)).collect()
+    });
+    let volumes: Vec<_> = volumes
+        .into_iter()
+        .filter_map(|vol| match vol {
+            Ok(vol) => Some(vol),
+            Err(e) => {
+                error!("{e}");
+                None
+            }
+        })
+        .collect();
+
     let mut res = Vec::new();
-    for name in args.volume.unwrap_or_else(Volume::names) {
-        let volume = Volume::new(&name).unwrap();
-        let mut index = Index::with_capacity(name, 100000);
+    for volume in volumes {
+        let mut index = Index::with_capacity(volume.driver().to_string(), 100000);
         let mut frns = Vec::new();
         let mut count = 0; // 记录遍历的日志数量
         for record in volume.iter_usn_record(4 * 1024 * 1024) {

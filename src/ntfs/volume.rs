@@ -1,5 +1,5 @@
 use anyhow::{ensure, Result};
-use std::{ffi::OsStr, iter::once, os::windows::ffi::OsStrExt};
+use std::{ffi::OsStr, iter::once, mem::MaybeUninit, os::windows::ffi::OsStrExt};
 use windows::{
     core::{Owned, PCWSTR},
     Win32::{
@@ -16,17 +16,20 @@ use super::IterUsnRecord;
 
 // https://github.com/microsoft/windows-rs/pull/3013
 // 通过Drop自动释放HANDLE
-pub struct Volume(Owned<HANDLE>);
+pub struct Volume {
+    driver: String,
+    handle: Owned<HANDLE>,
+}
 
 impl Volume {
-    pub fn new(name: &str) -> Result<Self> {
-        let fs = get_fs(name)?;
+    pub fn from_driver(driver: String) -> Result<Self> {
+        let fs = driver_fs(&driver)?;
         ensure!(fs == "NTFS", "不支持的文件系统：{}", fs);
 
         // https://learn.microsoft.com/zh-cn/windows/win32/fileio/naming-a-file
         let path: Vec<_> = OsStr::new(r"\\.\")
             .encode_wide()
-            .chain(OsStr::new(name).encode_wide())
+            .chain(OsStr::new(&driver).encode_wide())
             .chain(once(0))
             .collect();
         let handle = unsafe {
@@ -41,52 +44,44 @@ impl Volume {
                 None,
             )?)
         };
-        Ok(Self(handle))
+
+        Ok(Self { driver, handle })
     }
 
-    pub fn names() -> Vec<String> {
+    pub fn new_drivers() -> Vec<Result<Self>> {
         let mut res = Vec::new();
-        unsafe {
-            let mut mask = GetLogicalDrives();
-            for driver in 'A'..='Z' {
-                if mask & 1 == 1 {
-                    let name = driver.to_string() + ":";
-                    let path: Vec<_> = OsStr::new(&name).encode_wide().chain(once(0)).collect();
-
-                    // https://learn.microsoft.com/zh-cn/windows/win32/api/fileapi/nf-fileapi-getdrivetypew
-                    let driver_type = GetDriveTypeW(PCWSTR::from_raw(path.as_ptr()));
-                    // 只扫描这三种驱动器类型（网络驱动器会被IO阻塞）
-                    match driver_type {
-                        DRIVE_FIXED | DRIVE_REMOVABLE | DRIVE_RAMDISK => {
-                            if get_fs(&name).unwrap() == "NTFS" {
-                                res.push(name);
-                            }
-                        }
-                        _ => {}
-                    };
+        let mut mask = unsafe { GetLogicalDrives() };
+        for letter in 'A'..='Z' {
+            if mask & 1 == 1 {
+                let driver = format!("{}:", letter);
+                if matches!(
+                    driver_type(&driver),
+                    DRIVE_FIXED | DRIVE_REMOVABLE | DRIVE_RAMDISK
+                ) {
+                    res.push(Self::from_driver(driver));
                 }
+            }
 
-                mask >>= 1;
-                if mask == 0 {
-                    break;
-                }
+            mask >>= 1;
+            if mask == 0 {
+                break;
             }
         }
         res
     }
 
     pub fn iter_usn_record(&self, buffer_size: usize) -> IterUsnRecord {
-        IterUsnRecord::new(*self.0, buffer_size)
+        IterUsnRecord::new(*self.handle, buffer_size)
+    }
+
+    pub fn driver(&self) -> &str {
+        &self.driver
     }
 }
 
-fn get_fs(name: &str) -> Result<String> {
-    let path: Vec<_> = OsStr::new(&name)
-        .encode_wide()
-        .chain(OsStr::new(r"\").encode_wide())
-        .chain(once(0))
-        .collect();
-    let mut fs = [0_u16; 12];
+fn driver_fs(driver: &str) -> Result<String> {
+    let mut buf: MaybeUninit<[u16; 12]> = MaybeUninit::uninit();
+    let path = driver_to_path(driver);
     unsafe {
         // https://learn.microsoft.com/zh-cn/windows/win32/api/fileapi/nf-fileapi-getvolumeinformationw
         GetVolumeInformationW(
@@ -95,10 +90,24 @@ fn get_fs(name: &str) -> Result<String> {
             None,
             None,
             None,
-            Some(&mut fs),
+            Some(buf.assume_init_mut()),
         )?;
     }
-    // API返回的字符串以0表示结尾，但是Rust字符串不会这样认为
-    let fs: Vec<_> = fs.into_iter().take_while(|x| *x != 0).collect();
-    Ok(String::from_utf16_lossy(&fs))
+
+    let buf = unsafe { buf.assume_init_ref() };
+    let termination = buf.iter().position(|&ch| ch == 0).unwrap();
+    Ok(String::from_utf16_lossy(&buf[..termination]))
+}
+
+fn driver_type(driver: &str) -> u32 {
+    let path = driver_to_path(driver);
+    // https://learn.microsoft.com/zh-cn/windows/win32/api/fileapi/nf-fileapi-getdrivetypew
+    unsafe { GetDriveTypeW(PCWSTR::from_raw(path.as_ptr())) }
+}
+
+fn driver_to_path(driver: &str) -> Vec<u16> {
+    OsStr::new(driver)
+        .encode_wide()
+        .chain(OsStr::new("\\\0").encode_wide())
+        .collect()
 }
