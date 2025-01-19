@@ -59,7 +59,7 @@ fn main() {
         let mut index = Index::with_capacity(driver, 100000);
         let mut frns = Vec::new();
         let mut count = 0; // 记录遍历的日志数量
-        for record in volume.iter_usn_record(4 * 1024 * 1024) {
+        for record in volume.iter_usn_record::<4096>() {
             if let Some(finder) = &finder {
                 if finder.rfind(record.filename.as_bytes()).is_some() {
                     frns.push(record.frn);
