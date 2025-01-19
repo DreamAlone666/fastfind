@@ -48,8 +48,8 @@ impl Volume {
         Ok(Self { driver, handle })
     }
 
-    pub fn iter_usn_record(&self, buffer_size: usize) -> IterUsnRecord {
-        IterUsnRecord::new(*self.handle, buffer_size)
+    pub fn iter_usn_record(&self, buf_size: usize) -> IterUsnRecord {
+        IterUsnRecord::new(&self.handle, buf_size)
     }
 
     pub fn driver(&self) -> &str {

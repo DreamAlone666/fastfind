@@ -1,9 +1,12 @@
 use std::{ffi::c_void, ptr, slice};
-use windows::Win32::{
-    Foundation::HANDLE,
-    System::{
-        Ioctl::{FSCTL_ENUM_USN_DATA, MFT_ENUM_DATA_V1, USN_RECORD_V2},
-        IO::DeviceIoControl,
+use windows::{
+    core::Owned,
+    Win32::{
+        Foundation::HANDLE,
+        System::{
+            Ioctl::{FSCTL_ENUM_USN_DATA, MFT_ENUM_DATA_V1, USN_RECORD_V2},
+            IO::DeviceIoControl,
+        },
     },
 };
 
@@ -30,16 +33,16 @@ impl UsnRecord {
     }
 }
 
-pub struct IterUsnRecord {
-    handle: HANDLE,
+pub struct IterUsnRecord<'a> {
+    handle: &'a Owned<HANDLE>,
     in_buf: MFT_ENUM_DATA_V1,
     out_buf: Vec<u8>,
     left_bytes: u32,
     ptr: *const USN_RECORD_V2,
 }
 
-impl IterUsnRecord {
-    pub(super) fn new(handle: HANDLE, buffer: usize) -> Self {
+impl<'a> IterUsnRecord<'a> {
+    pub(super) fn new(handle: &'a Owned<HANDLE>, buf_size: usize) -> Self {
         Self {
             handle,
             in_buf: MFT_ENUM_DATA_V1 {
@@ -49,21 +52,21 @@ impl IterUsnRecord {
                 MinMajorVersion: 2,
                 MaxMajorVersion: 2,
             },
-            out_buf: vec![0; buffer], // 输出缓冲区，越大一次性得到的输出越多
+            out_buf: vec![0; buf_size], // 输出缓冲区，越大一次性得到的输出越多
             left_bytes: 0,
             ptr: ptr::null(),
         }
     }
 }
 
-impl Iterator for IterUsnRecord {
+impl Iterator for IterUsnRecord<'_> {
     type Item = UsnRecord;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             if self.left_bytes <= 0 {
                 let res = DeviceIoControl(
-                    self.handle,
+                    **self.handle,
                     FSCTL_ENUM_USN_DATA,
                     // 直接转成空指针似乎不行，要转两次
                     Some(&self.in_buf as *const _ as *const c_void),
