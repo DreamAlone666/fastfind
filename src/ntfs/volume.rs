@@ -48,28 +48,6 @@ impl Volume {
         Ok(Self { driver, handle })
     }
 
-    pub fn new_drivers() -> Vec<Result<Self>> {
-        let mut res = Vec::new();
-        let mut mask = unsafe { GetLogicalDrives() };
-        for letter in 'A'..='Z' {
-            if mask & 1 == 1 {
-                let driver = format!("{}:", letter);
-                if matches!(
-                    driver_type(&driver),
-                    DRIVE_FIXED | DRIVE_REMOVABLE | DRIVE_RAMDISK
-                ) {
-                    res.push(Self::from_driver(driver));
-                }
-            }
-
-            mask >>= 1;
-            if mask == 0 {
-                break;
-            }
-        }
-        res
-    }
-
     pub fn iter_usn_record(&self, buffer_size: usize) -> IterUsnRecord {
         IterUsnRecord::new(*self.handle, buffer_size)
     }
@@ -77,6 +55,28 @@ impl Volume {
     pub fn driver(&self) -> &str {
         &self.driver
     }
+}
+
+pub fn scan_drivers() -> Vec<String> {
+    let mut res = Vec::new();
+    let mut mask = unsafe { GetLogicalDrives() };
+    for letter in 'A'..='Z' {
+        if mask & 1 == 1 {
+            let driver = format!("{}:", letter);
+            if matches!(
+                driver_type(&driver),
+                DRIVE_FIXED | DRIVE_REMOVABLE | DRIVE_RAMDISK
+            ) {
+                res.push(driver);
+            }
+        }
+
+        mask >>= 1;
+        if mask == 0 {
+            break;
+        }
+    }
+    res
 }
 
 fn driver_fs(driver: &str) -> Result<String> {

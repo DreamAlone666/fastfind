@@ -4,13 +4,13 @@ mod style;
 
 use clap::Parser;
 use env_logger::Env;
-use log::{error, info};
+use log::{debug, error, info};
 use memchr::memmem::FinderRev;
 use nu_ansi_term::Color;
 use std::io::{stdin, stdout, Write};
 
 use index::Index;
-use ntfs::Volume;
+use ntfs::{scan_drivers, Volume};
 use style::Styled;
 
 #[derive(Debug, Parser)]
@@ -43,23 +43,20 @@ fn main() {
     let mut indices = Vec::new();
     // 根据输入判断是否为一次性查找
     let finder = args.input.as_ref().map(|input| FinderRev::new(input));
-    let volumes = args.volume.map_or_else(Volume::new_drivers, |x| {
-        x.into_iter().map(|drv| Volume::from_driver(drv)).collect()
-    });
-    let volumes: Vec<_> = volumes
-        .into_iter()
-        .filter_map(|vol| match vol {
-            Ok(vol) => Some(vol),
-            Err(e) => {
-                error!("{e}");
-                None
-            }
-        })
-        .collect();
-
     let mut res = Vec::new();
-    for volume in volumes {
-        let mut index = Index::with_capacity(volume.driver().to_string(), 100000);
+    for driver in args.volume.unwrap_or_else(scan_drivers) {
+        let volume = match Volume::from_driver(driver.clone()) {
+            Ok(vol) => {
+                debug!("Volume({:?})", vol.driver());
+                vol
+            }
+            Err(e) => {
+                error!("Volume({driver:?}): {e}");
+                continue;
+            }
+        };
+
+        let mut index = Index::with_capacity(driver, 100000);
         let mut frns = Vec::new();
         let mut count = 0; // 记录遍历的日志数量
         for record in volume.iter_usn_record(4 * 1024 * 1024) {
