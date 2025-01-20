@@ -1,9 +1,9 @@
-use log::{debug, error};
-use std::{ffi::c_void, mem::MaybeUninit, ptr, slice, usize};
+use anyhow::{anyhow, Result};
+use std::{ffi::c_void, mem::MaybeUninit, ptr, slice};
 use windows::{
     core::Owned,
     Win32::{
-        Foundation::HANDLE,
+        Foundation::{ERROR_HANDLE_EOF, HANDLE},
         System::{
             Ioctl::{FSCTL_ENUM_USN_DATA, MFT_ENUM_DATA_V1, USN_RECORD_V2},
             IO::DeviceIoControl,
@@ -61,12 +61,12 @@ impl<'a, const BS: usize> IterUsnRecord<'a, BS> {
 }
 
 impl<const BS: usize> Iterator for IterUsnRecord<'_, BS> {
-    type Item = UsnRecord;
+    type Item = Result<UsnRecord>;
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
             if self.left_bytes <= 0 {
-                DeviceIoControl(
+                if let Err(e) = DeviceIoControl(
                     **self.handle,
                     FSCTL_ENUM_USN_DATA,
                     Some(&self.in_buf as *const _ as *const c_void),
@@ -75,14 +75,18 @@ impl<const BS: usize> Iterator for IterUsnRecord<'_, BS> {
                     size_of_val(self.out_buf.assume_init_ref()) as _,
                     Some(&mut self.left_bytes),
                     None,
-                )
-                .inspect_err(|e| debug!("{e}"))
-                .ok()?;
+                ) {
+                    // https://learn.microsoft.com/zh-cn/windows/win32/api/winerror/nf-winerror-hresult_code
+                    if (e.code().0 & 0xFFFF) as u32 == ERROR_HANDLE_EOF.0 {
+                        return None;
+                    } else {
+                        return Some(Err(e.into()));
+                    }
+                };
 
                 // 缓冲区只够前导的u64数
                 if self.left_bytes == size_of::<u64>() as _ {
-                    error!("缓冲区过小：{}B", BS);
-                    return None;
+                    return Some(Err(anyhow!("缓冲区过小：{}B", BS)));
                 }
 
                 // 缓冲区最前头是一个u64数，后面跟着尽可能多的USN记录
@@ -95,7 +99,7 @@ impl<const BS: usize> Iterator for IterUsnRecord<'_, BS> {
             let record = UsnRecord::from_raw(self.ptr);
             self.ptr = self.ptr.byte_add(record.length as _);
             self.left_bytes -= record.length;
-            Some(record)
+            Some(Ok(record))
         }
     }
 }

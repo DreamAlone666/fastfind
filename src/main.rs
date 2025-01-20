@@ -60,6 +60,14 @@ fn main() {
         let mut frns = Vec::new();
         let mut count = 0; // 记录遍历的日志数量
         for record in volume.iter_usn_record::<4096>() {
+            let record = match record {
+                Ok(r) => r,
+                Err(e) => {
+                    error!("IterUsnRecord({:?}): {e}", volume.driver());
+                    break;
+                }
+            };
+
             if let Some(finder) = &finder {
                 if finder.rfind(record.filename.as_bytes()).is_some() {
                     frns.push(record.frn);
