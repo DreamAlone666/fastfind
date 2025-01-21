@@ -1,5 +1,7 @@
-use crate::ntfs::UsnRecord;
+use log::debug;
 use std::{collections::HashMap, path::MAIN_SEPARATOR_STR};
+
+use crate::ntfs::{UsnRecord, Volume};
 
 type Map = HashMap<u64, (u64, Box<str>)>;
 
@@ -61,5 +63,20 @@ impl<'a> IntoIterator for &'a Index {
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.iter()
+    }
+}
+
+impl TryFrom<&Volume> for Index {
+    type Error = anyhow::Error;
+
+    fn try_from(vol: &Volume) -> Result<Self, Self::Error> {
+        let mut index = Self::with_capacity(vol.driver().to_string(), 10_0000);
+        let mut count: u64 = 0;
+        for record in vol.iter_usn_record::<4096>() {
+            index.insert(record?);
+            count += 1;
+        }
+        debug!("IterUsnRecord({:?}) {count} 条", vol.driver());
+        Ok(index)
     }
 }
