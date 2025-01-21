@@ -4,14 +4,14 @@ use std::{collections::HashMap, path::MAIN_SEPARATOR_STR};
 type Map = HashMap<u64, (u64, Box<str>)>;
 
 pub struct Index {
-    letter: String,
+    driver: String,
     map: Map,
 }
 
 impl Index {
-    pub fn with_capacity(letter: String, capacity: usize) -> Self {
+    pub fn with_capacity(driver: String, capacity: usize) -> Self {
         Self {
-            letter: letter,
+            driver,
             map: HashMap::with_capacity(capacity),
         }
     }
@@ -32,7 +32,7 @@ impl Index {
             return None;
         }
 
-        parts.push(&self.letter);
+        parts.push(&self.driver);
         parts.reverse();
         Some(parts.join(MAIN_SEPARATOR_STR))
     }
@@ -41,8 +41,8 @@ impl Index {
         self.map.len()
     }
 
-    pub fn letter(&self) -> &str {
-        &self.letter
+    pub fn driver(&self) -> &str {
+        &self.driver
     }
 }
 

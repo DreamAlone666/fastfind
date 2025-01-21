@@ -62,7 +62,7 @@ pub fn scan_drivers() -> Vec<String> {
     let mut mask = unsafe { GetLogicalDrives() };
     for letter in 'A'..='Z' {
         if mask & 1 == 1 {
-            let driver = format!("{}:", letter);
+            let driver = String::from_iter([letter, ':']);
             if matches!(
                 driver_type(&driver),
                 DRIVE_FIXED | DRIVE_REMOVABLE | DRIVE_RAMDISK

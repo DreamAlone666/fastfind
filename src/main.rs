@@ -77,7 +77,7 @@ fn main() {
             count += 1;
         }
 
-        info!("索引{}盘USN日志{}条", index.letter(), count);
+        info!("索引{}盘USN日志{}条", index.driver(), count);
         indices.push(index);
         res.push(frns);
     }
@@ -136,7 +136,7 @@ fn main() {
                     }
                 }
             }
-            info!("查找{}盘索引{}条", index.letter(), index.len());
+            info!("查找{}盘索引{}条", index.driver(), index.len());
         }
     }
 }
