@@ -1,7 +1,10 @@
+mod iter_find;
+
 use log::debug;
 use std::{collections::HashMap, path::MAIN_SEPARATOR_STR};
 
 use crate::ntfs::{UsnRecord, Volume};
+use iter_find::IterFind;
 
 type Map = HashMap<u64, (u64, Box<str>)>;
 
@@ -45,6 +48,10 @@ impl Index {
 
     pub fn driver(&self) -> &str {
         &self.driver
+    }
+
+    pub fn iter_find<'a>(&'a self, sub: &'a str) -> IterFind<'a> {
+        IterFind::new(self, sub)
     }
 }
 
