@@ -1,6 +1,5 @@
 mod index;
 mod ntfs;
-mod style;
 
 use clap::Parser;
 use env_logger::Env;

@@ -1,7 +1,7 @@
 mod iter_find;
 
 use log::debug;
-use std::{collections::HashMap, path::MAIN_SEPARATOR_STR};
+use std::collections::HashMap;
 
 use crate::ntfs::{UsnRecord, Volume};
 use iter_find::IterFind;
@@ -24,26 +24,6 @@ impl Index {
     pub fn insert(&mut self, record: UsnRecord) {
         self.map
             .insert(record.frn, (record.parent_frn, record.filename.into()));
-    }
-
-    pub fn get_path(&self, mut frn: u64) -> Option<String> {
-        let mut parts = Vec::new();
-        while let Some((parent_frn, name)) = self.map.get(&frn) {
-            parts.push(name.as_ref());
-            frn = *parent_frn;
-        }
-
-        if parts.is_empty() {
-            return None;
-        }
-
-        parts.push(&self.driver);
-        parts.reverse();
-        Some(parts.join(MAIN_SEPARATOR_STR))
-    }
-
-    pub fn len(&self) -> usize {
-        self.map.len()
     }
 
     pub fn driver(&self) -> &str {
