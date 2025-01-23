@@ -4,14 +4,12 @@ mod style;
 
 use clap::Parser;
 use env_logger::Env;
-use log::{debug, error, info};
-use memchr::memmem::FinderRev;
-use nu_ansi_term::Color;
+use log::{debug, error};
+use nu_ansi_term::{Color, Style};
 use std::io::{stdin, stdout, Write};
 
 use index::Index;
 use ntfs::{scan_drivers, Volume};
-use style::Styled;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -23,16 +21,14 @@ struct Args {
     nocolor: bool,
 
     #[arg(long, help = "要搜索的盘")]
-    volume: Option<Vec<String>>,
+    driver: Option<Vec<String>>,
 
     #[arg(long, help = "默认日志等级设为debug")]
     verbose: bool,
 }
 
 fn main() {
-    let mut args = Args::parse();
-    // 忽略大小写
-    args.input = args.input.map(|s| s.to_ascii_lowercase());
+    let args = Args::parse();
 
     if args.verbose {
         env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
@@ -41,10 +37,7 @@ fn main() {
     }
 
     let mut indices = Vec::new();
-    // 根据输入判断是否为一次性查找
-    let finder = args.input.as_ref().map(|input| FinderRev::new(input));
-    let mut res = Vec::new();
-    for driver in args.volume.unwrap_or_else(scan_drivers) {
+    for driver in args.driver.unwrap_or_else(scan_drivers) {
         let volume = match Volume::from_driver(driver.clone()) {
             Ok(vol) => {
                 debug!("Volume({:?})", vol.driver());
@@ -55,52 +48,36 @@ fn main() {
                 continue;
             }
         };
-
-        let mut index = Index::with_capacity(driver, 100000);
-        let mut frns = Vec::new();
-        let mut count = 0; // 记录遍历的日志数量
-        for record in volume.iter_usn_record::<4096>() {
-            let record = match record {
-                Ok(r) => r,
-                Err(e) => {
-                    error!("IterUsnRecord({:?}): {e}", volume.driver());
-                    break;
-                }
-            };
-
-            if let Some(finder) = &finder {
-                if finder.rfind(record.filename.as_bytes()).is_some() {
-                    frns.push(record.frn);
-                }
+        let index = match Index::try_from(&volume) {
+            Ok(idx) => {
+                debug!("Index({:?})", idx.driver());
+                idx
             }
-            index.insert(record);
-            count += 1;
-        }
-
-        info!("索引{}盘USN日志{}条", index.driver(), count);
+            Err(e) => {
+                error!("Index({:?}): {e}", volume.driver());
+                continue;
+            }
+        };
         indices.push(index);
-        res.push(frns);
     }
 
-    if !args.nocolor {
+    let style = if args.nocolor {
+        Style::new()
+    } else {
         // Note for Windows 10 users: On Windows 10,
         // the application must enable ANSI support first:
         nu_ansi_term::enable_ansi_support().unwrap();
-    }
-    let style = Color::LightRed.bold();
+        Color::LightRed.bold()
+    };
 
     // 一次性查找，提前返回
-    if let Some(finder) = finder {
-        let mut lock = stdout().lock();
-        for (frns, index) in res.into_iter().zip(indices) {
-            for frn in frns {
-                let name = index.get_path(frn).unwrap();
-                if args.nocolor {
-                    writeln!(lock, "{}", name).unwrap();
-                } else {
-                    let styled = Styled::new(&style, &name, &finder);
-                    writeln!(lock, "{}", styled).unwrap();
-                }
+    let mut stdout = stdout();
+    if let Some(input) = args.input {
+        let mut lock = stdout.lock();
+        for index in indices {
+            for mut path in index.iter_find(&input) {
+                path.style(&style);
+                writeln!(lock, "{path}").unwrap();
             }
         }
         return;
@@ -108,35 +85,26 @@ fn main() {
 
     // 进入持久化查找
     let stdin = stdin();
-    let mut stdout = stdout();
     let mut buf = String::new();
+    let prompt = "[ffd]> ";
+    let prompt_style = if args.nocolor {
+        Style::new()
+    } else {
+        Color::LightGreen.bold()
+    };
     loop {
-        let prompt = "[ffd]> ";
-        match args.nocolor {
-            true => print!("{}", prompt),
-            false => print!("{}", Color::LightGreen.bold().paint(prompt)),
-        }
+        write!(stdout, "{}", prompt_style.paint(prompt)).unwrap();
         stdout.flush().unwrap();
 
         buf.clear();
         stdin.read_line(&mut buf).unwrap();
-        buf.make_ascii_lowercase();
 
-        let finder = FinderRev::new(buf.trim());
         let mut lock = stdout.lock();
         for index in &indices {
-            for (&frn, (_, name)) in index {
-                if finder.rfind(name.to_ascii_lowercase().as_bytes()).is_some() {
-                    let name = index.get_path(frn).unwrap();
-                    if args.nocolor {
-                        writeln!(lock, "{}", name).unwrap();
-                    } else {
-                        let styled = Styled::new(&style, &name, &finder);
-                        writeln!(lock, "{}", styled).unwrap();
-                    }
-                }
+            for mut path in index.iter_find(buf.trim()) {
+                path.style(&style);
+                writeln!(lock, "{}", path).unwrap();
             }
-            info!("查找{}盘索引{}条", index.driver(), index.len());
         }
     }
 }
