@@ -62,7 +62,7 @@ impl<'a> IterFind<'a> {
         Self {
             index,
             sub,
-            finder: Finder::new(sub),
+            finder: Finder::new(&sub.to_lowercase()).into_owned(),
             values: index.map.values(),
         }
     }
@@ -74,10 +74,10 @@ impl<'a> Iterator for IterFind<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (parent_frn, name) = self.values.next()?;
-            if let Some(mid) = self.finder.find(name.as_bytes()) {
+            if let Some(mid) = self.finder.find(name.to_lowercase().as_bytes()) {
                 return Some(FullPath {
                     prefix: &name[..mid],
-                    sub: self.sub,
+                    sub: &name[mid..(mid + self.sub.len())],
                     suffix: &name[(mid + self.sub.len())..],
                     index: self.index,
                     parent_frn: *parent_frn,
