@@ -65,7 +65,7 @@ impl<const BS: usize> Iterator for IterUsnRecord<'_, BS> {
 
     fn next(&mut self) -> Option<Self::Item> {
         unsafe {
-            if self.left_bytes <= 0 {
+            if self.left_bytes == 0 {
                 if let Err(e) = DeviceIoControl(
                     **self.handle,
                     FSCTL_ENUM_USN_DATA,
