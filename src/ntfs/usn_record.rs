@@ -11,6 +11,8 @@ use windows::{
     },
 };
 
+use super::Volume;
+
 pub struct UsnRecord {
     pub frn: u64,
     pub parent_frn: u64,
@@ -43,9 +45,9 @@ pub struct IterUsnRecord<'a, const BS: usize> {
 }
 
 impl<'a, const BS: usize> IterUsnRecord<'a, BS> {
-    pub(super) fn from_handle(handle: &'a Owned<HANDLE>) -> Self {
+    pub fn new(volume: &'a Volume) -> Self {
         Self {
-            handle,
+            handle: &volume.handle,
             in_buf: MFT_ENUM_DATA_V1 {
                 StartFileReferenceNumber: 0, // FSCTL_ENUM_USN_DATA要求从0开始
                 LowUsn: 0,
