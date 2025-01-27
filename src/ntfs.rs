@@ -1,3 +1,4 @@
+mod usn_journal_data;
 mod usn_record;
 
 use anyhow::{ensure, Result};
@@ -14,6 +15,7 @@ use windows::{
     },
 };
 
+pub use usn_journal_data::UsnJournalData;
 pub use usn_record::{IterUsnRecord, UsnRecord};
 
 // https://github.com/microsoft/windows-rs/pull/3013
@@ -52,6 +54,10 @@ impl Volume {
 
     pub fn iter_usn_record<const BS: usize>(&self) -> IterUsnRecord<BS> {
         IterUsnRecord::new(self)
+    }
+
+    pub fn usn_journal_data(&self) -> Result<UsnJournalData> {
+        UsnJournalData::try_new(self)
     }
 
     pub fn driver(&self) -> &str {
