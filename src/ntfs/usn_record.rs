@@ -36,7 +36,7 @@ impl UsnRecord {
     }
 }
 
-pub struct IterUsnRecord<'a, const BS: usize> {
+pub struct IterFileRecord<'a, const BS: usize> {
     handle: &'a Owned<HANDLE>,
     in_buf: MFT_ENUM_DATA_V1,
     out_buf: MaybeUninit<[u8; BS]>,
@@ -44,7 +44,7 @@ pub struct IterUsnRecord<'a, const BS: usize> {
     ptr: *const USN_RECORD_V2,
 }
 
-impl<'a, const BS: usize> IterUsnRecord<'a, BS> {
+impl<'a, const BS: usize> IterFileRecord<'a, BS> {
     pub fn new(volume: &'a Volume) -> Self {
         Self {
             handle: &volume.handle,
@@ -62,7 +62,7 @@ impl<'a, const BS: usize> IterUsnRecord<'a, BS> {
     }
 }
 
-impl<const BS: usize> Iterator for IterUsnRecord<'_, BS> {
+impl<const BS: usize> Iterator for IterFileRecord<'_, BS> {
     type Item = Result<UsnRecord>;
 
     fn next(&mut self) -> Option<Self::Item> {

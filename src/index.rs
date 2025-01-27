@@ -59,11 +59,11 @@ impl TryFrom<&Volume> for Index {
     fn try_from(vol: &Volume) -> Result<Self, Self::Error> {
         let mut index = Self::with_capacity(vol.driver().to_string(), 10_0000);
         let mut count: u64 = 0;
-        for record in vol.iter_usn_record::<4096>() {
+        for record in vol.iter_file_record::<4096>() {
             index.insert(record?);
             count += 1;
         }
-        debug!("IterUsnRecord({:?}) {count} 条", vol.driver());
+        debug!("IterFileRecord({:?}) {count} 条", vol.driver());
         Ok(index)
     }
 }
