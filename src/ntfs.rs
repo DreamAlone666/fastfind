@@ -16,7 +16,7 @@ use windows::{
 };
 
 pub use usn_journal_data::UsnJournalData;
-pub use usn_record::{IterFileRecord, UsnRecord};
+pub use usn_record::{IterFileRecord, IterUsnRecord, UsnRecord};
 
 // https://github.com/microsoft/windows-rs/pull/3013
 // 通过Drop自动释放HANDLE
@@ -58,6 +58,10 @@ impl Volume {
 
     pub fn usn_journal_data(&self) -> Result<UsnJournalData> {
         UsnJournalData::try_new(self)
+    }
+
+    pub fn iter_usn_record<const BS: usize>(&self, id: u64, start: i64) -> IterUsnRecord<BS> {
+        IterUsnRecord::with_start(self, id, start)
     }
 
     pub fn driver(&self) -> &str {
