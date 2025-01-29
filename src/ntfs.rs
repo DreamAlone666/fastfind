@@ -16,7 +16,7 @@ use windows::{
 };
 
 pub use usn_journal_data::UsnJournalData;
-pub use usn_record::{IterFileRecord, IterUsnRecord, UsnRecord};
+pub use usn_record::{FileRecords, UsnRecord, UsnRecords};
 
 // https://github.com/microsoft/windows-rs/pull/3013
 // 通过Drop自动释放HANDLE
@@ -26,7 +26,7 @@ pub struct Volume {
 }
 
 impl Volume {
-    pub fn from_driver(driver: String) -> Result<Self> {
+    pub fn open(driver: String) -> Result<Self> {
         let fs = driver_fs(&driver)?;
         ensure!(fs == "NTFS", "不支持的文件系统：{}", fs);
 
@@ -52,16 +52,16 @@ impl Volume {
         Ok(Self { driver, handle })
     }
 
-    pub fn iter_file_record<const BS: usize>(&self) -> IterFileRecord<BS> {
-        IterFileRecord::new(self)
+    pub fn file_records<const BS: usize>(&self) -> FileRecords<BS> {
+        FileRecords::new(self)
     }
 
     pub fn usn_journal_data(&self) -> Result<UsnJournalData> {
         UsnJournalData::try_new(self)
     }
 
-    pub fn iter_usn_record<const BS: usize>(&self, id: u64, start: i64) -> IterUsnRecord<BS> {
-        IterUsnRecord::with_start(self, id, start)
+    pub fn usn_records_from<const BS: usize>(&self, id: u64, start: i64) -> UsnRecords<BS> {
+        UsnRecords::with_start(self, id, start)
     }
 
     pub fn driver(&self) -> &str {

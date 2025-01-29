@@ -43,16 +43,16 @@ impl UsnRecord {
     }
 }
 
-pub struct IterFileRecord<'a, const BS: usize> {
+pub struct FileRecords<'a, const BS: usize> {
     handle: &'a Owned<HANDLE>,
     in_buf: MFT_ENUM_DATA_V1,
-    out_buf: IterRecordBuf<BS>,
+    out_buf: RecordBuf<BS>,
 }
 
-impl<'a, const BS: usize> IterFileRecord<'a, BS> {
-    pub fn new(volume: &'a Volume) -> Self {
+impl<'a, const BS: usize> FileRecords<'a, BS> {
+    pub fn new(vol: &'a Volume) -> Self {
         Self {
-            handle: &volume.handle,
+            handle: &vol.handle,
             in_buf: MFT_ENUM_DATA_V1 {
                 StartFileReferenceNumber: 0, // FSCTL_ENUM_USN_DATA要求从0开始
                 LowUsn: 0,
@@ -60,12 +60,12 @@ impl<'a, const BS: usize> IterFileRecord<'a, BS> {
                 MinMajorVersion: 2,
                 MaxMajorVersion: 2,
             },
-            out_buf: IterRecordBuf::new_uninit(),
+            out_buf: RecordBuf::new_uninit(),
         }
     }
 }
 
-impl<const BS: usize> Iterator for IterFileRecord<'_, BS> {
+impl<const BS: usize> Iterator for FileRecords<'_, BS> {
     type Item = Result<UsnRecord>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -101,13 +101,13 @@ impl<const BS: usize> Iterator for IterFileRecord<'_, BS> {
     }
 }
 
-pub struct IterUsnRecord<'a, const BS: usize> {
+pub struct UsnRecords<'a, const BS: usize> {
     handle: &'a Owned<HANDLE>,
     in_buf: READ_USN_JOURNAL_DATA_V0,
-    out_buf: IterRecordBuf<BS>,
+    out_buf: RecordBuf<BS>,
 }
 
-impl<'a, const BS: usize> IterUsnRecord<'a, BS> {
+impl<'a, const BS: usize> UsnRecords<'a, BS> {
     pub fn with_start(vol: &'a Volume, id: u64, start: i64) -> Self {
         const MASK: u32 = USN_REASON_FILE_CREATE
             | USN_REASON_FILE_DELETE
@@ -124,7 +124,7 @@ impl<'a, const BS: usize> IterUsnRecord<'a, BS> {
                 BytesToWaitFor: 0,
                 UsnJournalID: id,
             },
-            out_buf: IterRecordBuf::new_uninit(),
+            out_buf: RecordBuf::new_uninit(),
         }
     }
 
@@ -133,7 +133,7 @@ impl<'a, const BS: usize> IterUsnRecord<'a, BS> {
     }
 }
 
-impl<const BS: usize> Iterator for IterUsnRecord<'_, BS> {
+impl<const BS: usize> Iterator for UsnRecords<'_, BS> {
     type Item = Result<UsnRecord>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -168,13 +168,13 @@ impl<const BS: usize> Iterator for IterUsnRecord<'_, BS> {
     }
 }
 
-struct IterRecordBuf<const BS: usize> {
+struct RecordBuf<const BS: usize> {
     buf: MaybeUninit<[u8; BS]>,
     left_bytes: u32,
     ptr: *const USN_RECORD_V2,
 }
 
-impl<const BS: usize> IterRecordBuf<BS> {
+impl<const BS: usize> RecordBuf<BS> {
     fn new_uninit() -> Self {
         Self {
             buf: MaybeUninit::uninit(),
@@ -196,7 +196,7 @@ impl<const BS: usize> IterRecordBuf<BS> {
     }
 }
 
-impl<const BS: usize> Iterator for IterRecordBuf<BS> {
+impl<const BS: usize> Iterator for RecordBuf<BS> {
     type Item = UsnRecord;
 
     fn next(&mut self) -> Option<Self::Item> {

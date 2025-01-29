@@ -50,14 +50,14 @@ impl Display for FullPath<'_> {
     }
 }
 
-pub struct IterFind<'a> {
+pub struct FindIter<'a> {
     index: &'a Index,
     sub: &'a str,
     finder: Finder<'a>,
     values: Values<'a, u64, (u64, Box<str>)>,
 }
 
-impl<'a> IterFind<'a> {
+impl<'a> FindIter<'a> {
     pub fn new(index: &'a Index, sub: &'a str) -> Self {
         Self {
             index,
@@ -68,7 +68,7 @@ impl<'a> IterFind<'a> {
     }
 }
 
-impl<'a> Iterator for IterFind<'a> {
+impl<'a> Iterator for FindIter<'a> {
     type Item = FullPath<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -37,7 +37,7 @@ fn main() {
 
     let mut indices = Vec::new();
     for driver in args.driver.unwrap_or_else(scan_drivers) {
-        let volume = match Volume::from_driver(driver.clone()) {
+        let volume = match Volume::open(driver.clone()) {
             Ok(vol) => {
                 debug!("Volume({:?})", vol.driver());
                 vol
@@ -47,7 +47,7 @@ fn main() {
                 continue;
             }
         };
-        let index = match Index::try_from(&volume) {
+        let index = match Index::try_from_volume(&volume) {
             Ok(idx) => {
                 debug!("Index({:?})", idx.driver());
                 idx
@@ -74,7 +74,7 @@ fn main() {
     if let Some(input) = args.input {
         let mut lock = stdout.lock();
         for index in indices {
-            for mut path in index.iter_find(&input) {
+            for mut path in index.find_iter(&input) {
                 path.style(&style);
                 writeln!(lock, "{path}").unwrap();
             }
@@ -100,7 +100,7 @@ fn main() {
 
         let mut lock = stdout.lock();
         for index in &indices {
-            for mut path in index.iter_find(buf.trim()) {
+            for mut path in index.find_iter(buf.trim()) {
                 path.style(&style);
                 writeln!(lock, "{}", path).unwrap();
             }
