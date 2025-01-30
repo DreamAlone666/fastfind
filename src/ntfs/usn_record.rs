@@ -7,8 +7,7 @@ use windows::{
         System::{
             Ioctl::{
                 FSCTL_ENUM_USN_DATA, FSCTL_READ_USN_JOURNAL, MFT_ENUM_DATA_V1,
-                READ_USN_JOURNAL_DATA_V0, USN_REASON_CLOSE, USN_REASON_FILE_CREATE,
-                USN_REASON_FILE_DELETE, USN_REASON_RENAME_NEW_NAME, USN_RECORD_V2,
+                READ_USN_JOURNAL_DATA_V0, USN_REASON_CLOSE, USN_RECORD_V2,
             },
             IO::DeviceIoControl,
         },
@@ -109,16 +108,12 @@ pub struct UsnRecords<'a, const BS: usize> {
 
 impl<'a, const BS: usize> UsnRecords<'a, BS> {
     pub fn with_start(vol: &'a Volume, id: u64, start: i64) -> Self {
-        const MASK: u32 = USN_REASON_FILE_CREATE
-            | USN_REASON_FILE_DELETE
-            | USN_REASON_RENAME_NEW_NAME
-            | USN_REASON_CLOSE;
         Self {
             handle: &vol.handle,
             // https://learn.microsoft.com/zh-cn/windows/win32/api/winioctl/ns-winioctl-read_usn_journal_data_v0
             in_buf: READ_USN_JOURNAL_DATA_V0 {
                 StartUsn: start,
-                ReasonMask: MASK,
+                ReasonMask: USN_REASON_CLOSE,
                 ReturnOnlyOnClose: 1,
                 Timeout: 0,
                 BytesToWaitFor: 0,
@@ -161,10 +156,7 @@ impl<const BS: usize> Iterator for UsnRecords<'_, BS> {
             self.in_buf.StartUsn = usn;
         }
 
-        match self.out_buf.next() {
-            Some(r) => Some(Ok(r)),
-            None => Some(Err(anyhow!("缓冲区过小: {BS}B"))),
-        }
+        Ok(self.out_buf.next()).transpose()
     }
 }
 
