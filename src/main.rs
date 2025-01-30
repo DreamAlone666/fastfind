@@ -35,6 +35,7 @@ fn main() {
         env_logger::init();
     }
 
+    let mut volumes = Vec::new();
     let mut indices = Vec::new();
     for driver in args.driver.unwrap_or_else(scan_drivers) {
         let volume = match Volume::open(driver.clone()) {
@@ -57,6 +58,7 @@ fn main() {
                 continue;
             }
         };
+        volumes.push(volume);
         indices.push(index);
     }
 
@@ -98,8 +100,11 @@ fn main() {
         buf.clear();
         stdin.read_line(&mut buf).unwrap();
 
-        let mut lock = stdout.lock();
-        for index in &indices {
+        for (index, volume) in indices.iter_mut().zip(&volumes) {
+            if let Err(e) = index.sync(volume) {
+                error!("Index({:?}) 同步失败：{e}", index.driver());
+            }
+            let mut lock = stdout.lock();
             for mut path in index.find_iter(buf.trim()) {
                 path.style(&style);
                 writeln!(lock, "{}", path).unwrap();
