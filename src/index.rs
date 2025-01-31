@@ -55,7 +55,7 @@ impl Index {
     pub fn sync(&mut self, vol: &Volume) -> Result<()> {
         let id = vol.usn_journal_data()?.id;
         let mut usn_records = vol.usn_records_from::<4096>(id, self.usn);
-        while let Some(res) = usn_records.next() {
+        for res in &mut usn_records {
             let record = res?;
             // 只匹配文件关闭时的事件
             match record.reason ^ USN_REASON_CLOSE {

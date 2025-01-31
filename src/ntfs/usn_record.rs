@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use std::{ffi::c_void, mem::MaybeUninit, ptr, slice, u32};
+use std::{ffi::c_void, mem::MaybeUninit, ptr, slice};
 use windows::{
     core::Owned,
     Win32::{

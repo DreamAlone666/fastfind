@@ -10,7 +10,6 @@ use super::Volume;
 #[derive(Debug)]
 pub struct UsnJournalData {
     pub id: u64,
-    pub first_usn: i64,
     pub next_usn: i64,
 }
 
@@ -19,7 +18,6 @@ impl UsnJournalData {
         let data = &*ptr;
         Self {
             id: data.UsnJournalID,
-            first_usn: data.FirstUsn,
             next_usn: data.NextUsn,
         }
     }
