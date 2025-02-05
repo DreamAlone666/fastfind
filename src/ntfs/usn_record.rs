@@ -1,16 +1,13 @@
 use anyhow::{anyhow, Result};
 use std::{ffi::c_void, mem::MaybeUninit, ptr, slice};
-use windows::{
-    core::Owned,
-    Win32::{
-        Foundation::{ERROR_HANDLE_EOF, HANDLE},
-        System::{
-            Ioctl::{
-                FSCTL_ENUM_USN_DATA, FSCTL_READ_USN_JOURNAL, MFT_ENUM_DATA_V1,
-                READ_USN_JOURNAL_DATA_V0, USN_REASON_CLOSE, USN_RECORD_V2,
-            },
-            IO::DeviceIoControl,
+use windows::Win32::{
+    Foundation::ERROR_HANDLE_EOF,
+    System::{
+        Ioctl::{
+            FSCTL_ENUM_USN_DATA, FSCTL_READ_USN_JOURNAL, MFT_ENUM_DATA_V1,
+            READ_USN_JOURNAL_DATA_V0, USN_REASON_CLOSE, USN_RECORD_V2,
         },
+        IO::DeviceIoControl,
     },
 };
 
@@ -43,7 +40,7 @@ impl UsnRecord {
 }
 
 pub struct FileRecords<'a, const BS: usize> {
-    handle: &'a Owned<HANDLE>,
+    volume: &'a Volume,
     in_buf: MFT_ENUM_DATA_V1,
     out_buf: RecordBuf<BS>,
 }
@@ -51,7 +48,7 @@ pub struct FileRecords<'a, const BS: usize> {
 impl<'a, const BS: usize> FileRecords<'a, BS> {
     pub fn new(vol: &'a Volume) -> Self {
         Self {
-            handle: &vol.handle,
+            volume: vol,
             in_buf: MFT_ENUM_DATA_V1 {
                 StartFileReferenceNumber: 0, // FSCTL_ENUM_USN_DATA要求从0开始
                 LowUsn: 0,
@@ -74,7 +71,7 @@ impl<const BS: usize> Iterator for FileRecords<'_, BS> {
 
         unsafe {
             if let Err(e) = DeviceIoControl(
-                **self.handle,
+                self.volume.handle(),
                 FSCTL_ENUM_USN_DATA,
                 Some(&self.in_buf as *const _ as *const c_void),
                 size_of_val(&self.in_buf) as _,
@@ -101,7 +98,7 @@ impl<const BS: usize> Iterator for FileRecords<'_, BS> {
 }
 
 pub struct UsnRecords<'a, const BS: usize> {
-    handle: &'a Owned<HANDLE>,
+    volume: &'a Volume,
     in_buf: READ_USN_JOURNAL_DATA_V0,
     out_buf: RecordBuf<BS>,
 }
@@ -109,7 +106,7 @@ pub struct UsnRecords<'a, const BS: usize> {
 impl<'a, const BS: usize> UsnRecords<'a, BS> {
     pub fn with_start(vol: &'a Volume, id: u64, start: i64) -> Self {
         Self {
-            handle: &vol.handle,
+            volume: vol,
             // https://learn.microsoft.com/zh-cn/windows/win32/api/winioctl/ns-winioctl-read_usn_journal_data_v0
             in_buf: READ_USN_JOURNAL_DATA_V0 {
                 StartUsn: start,
@@ -138,7 +135,7 @@ impl<const BS: usize> Iterator for UsnRecords<'_, BS> {
 
         unsafe {
             if let Err(e) = DeviceIoControl(
-                **self.handle,
+                self.volume.handle(),
                 FSCTL_READ_USN_JOURNAL,
                 Some(&self.in_buf as *const _ as *const c_void),
                 size_of_val(&self.in_buf) as _,

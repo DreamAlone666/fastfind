@@ -2,15 +2,17 @@ mod usn_journal_data;
 mod usn_record;
 
 use anyhow::{ensure, Result};
-use std::{ffi::OsStr, iter::once, mem::MaybeUninit, os::windows::ffi::OsStrExt};
+use std::{
+    ffi::OsStr,
+    fs::File,
+    mem::MaybeUninit,
+    os::windows::{ffi::OsStrExt, io::AsRawHandle},
+};
 use windows::{
-    core::{Owned, PCWSTR},
+    core::PCWSTR,
     Win32::{
-        Foundation::{GENERIC_READ, HANDLE},
-        Storage::FileSystem::{
-            CreateFileW, GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
-            FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
-        },
+        Foundation::HANDLE,
+        Storage::FileSystem::{GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW},
         System::WindowsProgramming::{DRIVE_FIXED, DRIVE_RAMDISK, DRIVE_REMOVABLE},
     },
 };
@@ -22,7 +24,7 @@ pub use usn_record::{FileRecords, UsnRecord, UsnRecords};
 // 通过Drop自动释放HANDLE
 pub struct Volume {
     driver: String,
-    handle: Owned<HANDLE>,
+    file: File,
 }
 
 impl Volume {
@@ -30,26 +32,10 @@ impl Volume {
         let fs = driver_fs(&driver)?;
         ensure!(fs == "NTFS", "不支持的文件系统：{}", fs);
 
-        // https://learn.microsoft.com/zh-cn/windows/win32/fileio/naming-a-file
-        let path: Vec<_> = OsStr::new(r"\\.\")
-            .encode_wide()
-            .chain(OsStr::new(&driver).encode_wide())
-            .chain(once(0))
-            .collect();
-        let handle = unsafe {
-            // https://learn.microsoft.com/zh-cn/windows/win32/api/fileapi/nf-fileapi-createfilew
-            Owned::new(CreateFileW(
-                PCWSTR::from_raw(path.as_ptr()),
-                GENERIC_READ.0,
-                FILE_SHARE_READ | FILE_SHARE_WRITE,
-                None,
-                OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL,
-                None,
-            )?)
-        };
-
-        Ok(Self { driver, handle })
+        Ok(Self {
+            file: File::open(format!("{}{driver}", r"\\.\"))?,
+            driver,
+        })
     }
 
     pub fn file_records<const BS: usize>(&self) -> FileRecords<BS> {
@@ -66,6 +52,10 @@ impl Volume {
 
     pub fn driver(&self) -> &str {
         &self.driver
+    }
+
+    fn handle(&self) -> HANDLE {
+        HANDLE(self.file.as_raw_handle())
     }
 }
 
