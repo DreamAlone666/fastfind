@@ -13,9 +13,6 @@ use ntfs::{scan_drivers, Volume};
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, help = "一次性查询")]
-    input: Option<String>,
-
     #[arg(long, help = "不使用彩色输出")]
     nocolor: bool,
 
@@ -71,21 +68,9 @@ fn main() {
         Color::LightRed.bold()
     };
 
-    // 一次性查找，提前返回
-    let mut stdout = stdout();
-    if let Some(input) = args.input {
-        let mut lock = stdout.lock();
-        for index in indices {
-            for mut path in index.find_iter(&input) {
-                path.style(&style);
-                writeln!(lock, "{path}").unwrap();
-            }
-        }
-        return;
-    }
-
     // 进入持久化查找
     let stdin = stdin();
+    let mut stdout = stdout();
     let mut buf = String::new();
     let prompt = "[ffd]> ";
     let prompt_style = if args.nocolor {
