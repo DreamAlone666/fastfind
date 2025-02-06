@@ -5,7 +5,11 @@ use clap::Parser;
 use env_logger::Env;
 use log::{debug, error};
 use nu_ansi_term::{Color, Style};
-use std::io::{stdin, stdout, Write};
+use std::{
+    io::{stdin, stdout, Write},
+    sync::{Arc, Mutex},
+    thread::spawn,
+};
 
 use index::Index;
 use ntfs::{scan_drivers, Volume};
@@ -32,40 +36,43 @@ fn main() {
         env_logger::init();
     }
 
-    let mut volumes = Vec::new();
-    let mut indices = Vec::new();
+    let drivers = Arc::new(Mutex::new(Vec::new()));
+    let mut handles = Some(Vec::new());
     for driver in args.driver.unwrap_or_else(scan_drivers) {
-        let volume = match Volume::open(driver.clone()) {
-            Ok(vol) => {
-                debug!("Volume({:?})", vol.driver());
-                vol
-            }
-            Err(e) => {
-                error!("Volume({driver:?}): {e}");
-                continue;
-            }
-        };
-        let index = match Index::try_from_volume(&volume) {
-            Ok(idx) => {
-                debug!("Index({:?})", idx.driver());
-                idx
-            }
-            Err(e) => {
-                error!("Index({:?}): {e}", volume.driver());
-                continue;
-            }
-        };
-        volumes.push(volume);
-        indices.push(index);
+        let drivers = Arc::clone(&drivers);
+        let handle = spawn(move || {
+            let volume = match Volume::open(driver.clone()) {
+                Ok(vol) => {
+                    debug!("Volume({:?})", vol.driver());
+                    vol
+                }
+                Err(e) => {
+                    error!("Volume({driver:?}): {e}");
+                    return;
+                }
+            };
+            let index = match Index::try_from_volume(&volume) {
+                Ok(idx) => {
+                    debug!("Index({:?})", idx.driver());
+                    idx
+                }
+                Err(e) => {
+                    error!("Index({:?}): {e}", volume.driver());
+                    return;
+                }
+            };
+            drivers.lock().unwrap().push((volume, index));
+        });
+        handles.as_mut().unwrap().push(handle);
     }
 
-    let style = if args.nocolor {
-        Style::new()
+    let (style, prompt_style) = if args.nocolor {
+        (Style::new(), Style::new())
     } else {
         // Note for Windows 10 users: On Windows 10,
         // the application must enable ANSI support first:
         nu_ansi_term::enable_ansi_support().unwrap();
-        Color::LightRed.bold()
+        (Color::LightRed.bold(), Color::LightGreen.bold())
     };
 
     // 进入持久化查找
@@ -73,11 +80,6 @@ fn main() {
     let mut stdout = stdout();
     let mut buf = String::new();
     let prompt = "[ffd]> ";
-    let prompt_style = if args.nocolor {
-        Style::new()
-    } else {
-        Color::LightGreen.bold()
-    };
     loop {
         write!(stdout, "{}", prompt_style.paint(prompt)).unwrap();
         stdout.flush().unwrap();
@@ -85,14 +87,22 @@ fn main() {
         buf.clear();
         stdin.read_line(&mut buf).unwrap();
 
-        for (index, volume) in indices.iter_mut().zip(&volumes) {
-            if let Err(e) = index.sync(volume) {
-                error!("Index({:?}) 同步失败：{e}", index.driver());
+        // 等待索引完成
+        if let Some(handles) = handles.take() {
+            for handle in handles {
+                handle.join().unwrap();
             }
-            let mut lock = stdout.lock();
-            for mut path in index.find_iter(buf.trim()) {
+        }
+
+        let mut drivers = drivers.lock().unwrap();
+        for (vol, idx) in drivers.iter_mut() {
+            if let Err(e) = idx.sync(vol) {
+                error!("Index({:?}) 同步失败：{e}", idx.driver());
+            }
+            let mut stdout = stdout.lock();
+            for mut path in idx.find_iter(buf.trim()) {
                 path.style(&style);
-                writeln!(lock, "{}", path).unwrap();
+                writeln!(stdout, "{}", path).unwrap();
             }
         }
     }
