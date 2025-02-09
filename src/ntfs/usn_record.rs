@@ -71,7 +71,7 @@ impl<const BS: usize> Iterator for FileRecords<'_, BS> {
 
         unsafe {
             if let Err(e) = DeviceIoControl(
-                self.volume.handle(),
+                self.volume.as_handle(),
                 FSCTL_ENUM_USN_DATA,
                 Some(&self.in_buf as *const _ as *const c_void),
                 size_of_val(&self.in_buf) as _,
@@ -135,7 +135,7 @@ impl<const BS: usize> Iterator for UsnRecords<'_, BS> {
 
         unsafe {
             if let Err(e) = DeviceIoControl(
-                self.volume.handle(),
+                self.volume.as_handle(),
                 FSCTL_READ_USN_JOURNAL,
                 Some(&self.in_buf as *const _ as *const c_void),
                 size_of_val(&self.in_buf) as _,

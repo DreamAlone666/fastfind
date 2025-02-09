@@ -27,7 +27,7 @@ impl UsnJournalData {
         let mut buf = MaybeUninit::<[u8; BS]>::uninit();
         unsafe {
             DeviceIoControl(
-                vol.handle(),
+                vol.as_handle(),
                 FSCTL_QUERY_USN_JOURNAL,
                 None,
                 0,

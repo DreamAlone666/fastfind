@@ -54,7 +54,7 @@ impl Volume {
         &self.driver
     }
 
-    fn handle(&self) -> HANDLE {
+    fn as_handle(&self) -> HANDLE {
         HANDLE(self.file.as_raw_handle())
     }
 }
