@@ -1,6 +1,3 @@
-mod index;
-mod ntfs;
-
 use clap::Parser;
 use env_logger::Env;
 use log::{debug, error};
@@ -11,8 +8,7 @@ use std::{
     thread::spawn,
 };
 
-use index::Index;
-use ntfs::{scan_drivers, Volume};
+use ffd::{scan_drivers, Index, Volume};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -51,7 +47,7 @@ fn main() {
                     return;
                 }
             };
-            let index = match Index::try_from_volume(&volume) {
+            let index: Index = match Index::try_from_volume(&volume) {
                 Ok(idx) => {
                     debug!("Index({:?})", idx.driver());
                     idx
