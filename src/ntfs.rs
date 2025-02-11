@@ -38,6 +38,7 @@ impl Volume {
         })
     }
 
+    /// 基准测试中，64KB 缓冲区占优
     pub fn file_records<const BS: usize>(&self) -> FileRecords<BS> {
         FileRecords::new(self)
     }

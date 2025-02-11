@@ -31,7 +31,7 @@ impl Index {
         let usn = vol.usn_journal_data()?.next_usn;
         let mut index = Self::with_capacity(vol.driver().to_string(), usn, 10_0000);
         let mut count: u64 = 0;
-        for record in vol.file_records::<4096>() {
+        for record in vol.file_records::<{ 64 * 1024 }>() {
             index.insert(record?);
             count += 1;
         }
