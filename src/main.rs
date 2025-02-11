@@ -1,11 +1,11 @@
+use anyhow::{Context, Result};
 use clap::Parser;
 use env_logger::Env;
-use log::{debug, error};
+use log::error;
 use nu_ansi_term::{Color, Style};
 use std::{
     io::{stdin, stdout, Write},
-    sync::{Arc, Mutex},
-    thread::spawn,
+    thread::{spawn, JoinHandle},
 };
 
 use ffd::{scan_drivers, Index, Volume};
@@ -32,32 +32,12 @@ fn main() {
         env_logger::init();
     }
 
-    let drivers = Arc::new(Mutex::new(Vec::new()));
     let mut handles = Some(Vec::new());
-    for driver in args.driver.unwrap_or_else(scan_drivers) {
-        let drivers = Arc::clone(&drivers);
-        let handle = spawn(move || {
-            let volume = match Volume::open(driver.clone()) {
-                Ok(vol) => {
-                    debug!("Volume({:?})", vol.driver());
-                    vol
-                }
-                Err(e) => {
-                    error!("Volume({driver:?}): {e}");
-                    return;
-                }
-            };
-            let index: Index = match Index::try_from_volume(&volume) {
-                Ok(idx) => {
-                    debug!("Index({:?})", idx.driver());
-                    idx
-                }
-                Err(e) => {
-                    error!("Index({:?}): {e}", volume.driver());
-                    return;
-                }
-            };
-            drivers.lock().unwrap().push((volume, index));
+    for drv in args.driver.unwrap_or_else(scan_drivers) {
+        let handle: JoinHandle<Result<(Volume, Index)>> = spawn(move || {
+            let vol = Volume::open(drv.clone()).with_context(|| format!("打开{drv:?}失败"))?;
+            let idx = Index::try_from_volume(&vol).with_context(|| format!("索引{drv:?}失败"))?;
+            Ok((vol, idx))
         });
         handles.as_mut().unwrap().push(handle);
     }
@@ -76,6 +56,7 @@ fn main() {
     let mut stdout = stdout();
     let mut buf = String::new();
     let prompt = "[ffd]> ";
+    let mut drivers = Vec::with_capacity(handles.as_ref().unwrap().len());
     loop {
         write!(stdout, "{}", prompt_style.paint(prompt)).unwrap();
         stdout.flush().unwrap();
@@ -86,12 +67,14 @@ fn main() {
         // 等待索引完成
         if let Some(handles) = handles.take() {
             for handle in handles {
-                handle.join().unwrap();
+                match handle.join().unwrap() {
+                    Ok(drv) => drivers.push(drv),
+                    Err(e) => error!("{e:#}"),
+                }
             }
         }
 
-        let mut drivers = drivers.lock().unwrap();
-        for (vol, idx) in drivers.iter_mut() {
+        for (vol, idx) in &mut drivers {
             if let Err(e) = idx.sync(vol) {
                 error!("Index({:?}) 同步失败：{e}", idx.driver());
             }
