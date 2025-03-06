@@ -64,6 +64,11 @@ fn main() {
         buf.clear();
         stdin.read_line(&mut buf).unwrap();
 
+        let input = buf.trim();
+        if input.is_empty() {
+            continue;
+        }
+
         // 等待索引完成
         if let Some(handles) = handles.take() {
             for handle in handles {
@@ -79,7 +84,7 @@ fn main() {
                 error!("Index({:?}) 同步失败：{e}", idx.driver());
             }
             let mut stdout = stdout.lock();
-            for mut path in idx.find_iter(buf.trim()) {
+            for mut path in idx.find_iter(input) {
                 path.style(&style);
                 writeln!(stdout, "{}", path).unwrap();
             }
