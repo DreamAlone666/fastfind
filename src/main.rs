@@ -1,93 +1,181 @@
-use anyhow::{Context, Result};
-use clap::Parser;
-use env_logger::Env;
-use log::error;
-use nu_ansi_term::{Color, Style};
+use anyhow::Result;
+use eframe::{
+    egui::{CentralPanel, Context, FontData, FontFamily, ScrollArea, TextEdit, TextStyle},
+    epaint::text::{FontInsert, FontPriority, InsertFontFamily},
+    App, Frame, NativeOptions,
+};
 use std::{
-    io::{stdin, stdout, Write},
+    env,
+    fs::File,
+    io::{self, Read},
+    mem::take,
+    path::PathBuf,
+    sync::mpsc::{channel, Receiver, Sender},
     thread::{spawn, JoinHandle},
 };
 
 use ffd::{scan_drivers, Index, Volume};
 
-#[derive(Debug, Parser)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[arg(long, help = "不使用彩色输出")]
-    nocolor: bool,
+fn main() -> eframe::Result {
+    eframe::run_native(
+        "FastFind",
+        NativeOptions::default(),
+        Box::new(|cc| {
+            configure_font(&cc.egui_ctx).unwrap();
 
-    #[arg(long, help = "要搜索的盘")]
-    driver: Option<Vec<String>>,
-
-    #[arg(long, help = "默认日志等级设为debug")]
-    verbose: bool,
+            Ok(Box::<FastFind>::default())
+        }),
+    )
 }
 
-fn main() {
-    let args = Args::parse();
+fn configure_font(ctx: &Context) -> io::Result<()> {
+    let mut path: PathBuf = env::var("SystemRoot")
+        .unwrap_or(r"C:\Windows".to_string())
+        .into();
+    path.push(r"Fonts\msyh.ttc");
+    let mut buf = Vec::new();
+    File::open(path)?.read_to_end(&mut buf)?;
+    ctx.add_font(FontInsert::new(
+        "微软雅黑",
+        FontData::from_owned(buf),
+        vec![InsertFontFamily {
+            family: FontFamily::Proportional,
+            priority: FontPriority::Highest,
+        }],
+    ));
 
-    if args.verbose {
-        env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
-    } else {
-        env_logger::init();
-    }
+    Ok(())
+}
 
-    let mut handles = Some(Vec::new());
-    for drv in args.driver.unwrap_or_else(scan_drivers) {
-        let handle: JoinHandle<Result<(Volume, Index)>> = spawn(move || {
-            let vol = Volume::open(drv.clone()).with_context(|| format!("打开{drv:?}失败"))?;
-            let idx = Index::try_from_volume(&vol).with_context(|| format!("索引{drv:?}失败"))?;
-            Ok((vol, idx))
-        });
-        handles.as_mut().unwrap().push(handle);
-    }
+#[derive(Default)]
+struct FastFind {
+    input: String,
+    index_state: IndexState,
+}
 
-    let (style, prompt_style) = if args.nocolor {
-        (Style::new(), Style::new())
-    } else {
-        // Note for Windows 10 users: On Windows 10,
-        // the application must enable ANSI support first:
-        nu_ansi_term::enable_ansi_support().unwrap();
-        (Color::LightRed.bold(), Color::LightGreen.bold())
-    };
-
-    // 进入持久化查找
-    let stdin = stdin();
-    let mut stdout = stdout();
-    let mut buf = String::new();
-    let prompt = "[ffd]> ";
-    let mut drivers = Vec::with_capacity(handles.as_ref().unwrap().len());
-    loop {
-        write!(stdout, "{}", prompt_style.paint(prompt)).unwrap();
-        stdout.flush().unwrap();
-
-        buf.clear();
-        stdin.read_line(&mut buf).unwrap();
-
-        let input = buf.trim();
-        if input.is_empty() {
-            continue;
+impl FastFind {
+    fn find(&mut self, sub: String) {
+        if let IndexState::Ready {
+            sender,
+            receiver,
+            paths,
+        } = &mut self.index_state
+        {
+            paths.clear();
+            let (tx, rx) = channel();
+            *receiver = rx;
+            sender.send((sub, tx)).unwrap();
         }
+    }
 
-        // 等待索引完成
-        if let Some(handles) = handles.take() {
-            for handle in handles {
-                match handle.join().unwrap() {
-                    Ok(drv) => drivers.push(drv),
-                    Err(e) => error!("{e:#}"),
+    fn sync(&mut self) {
+        match &mut self.index_state {
+            IndexState::Indxing(handles) => {
+                if handles.iter().all(|h| h.is_finished()) {
+                    let mut drvs: Vec<_> = take(handles)
+                        .into_iter()
+                        .map(|h| h.join().unwrap().unwrap())
+                        .collect();
+
+                    let (find_tx, find_rx) = channel::<(String, Sender<String>)>();
+                    let (res_tx, res_rx) = channel();
+                    find_tx.send((String::new(), res_tx)).unwrap();
+                    spawn(move || loop {
+                        let (sub, res_tx) = find_rx.recv().unwrap();
+                        // 空字符串不做搜索
+                        if sub.is_empty() {
+                            continue;
+                        }
+
+                        'outer: for (vol, idx) in &mut drvs {
+                            idx.sync(vol).unwrap();
+                            for path in idx.find_iter(&sub) {
+                                if res_tx.send(path.to_string()).is_err() {
+                                    break 'outer;
+                                }
+                            }
+                        }
+                    });
+
+                    self.index_state = IndexState::Ready {
+                        sender: find_tx,
+                        receiver: res_rx,
+                        paths: Vec::new(),
+                    };
                 }
             }
+            IndexState::Ready {
+                sender: _,
+                receiver,
+                paths,
+            } => {
+                // 一次性接收太多会导致卡死
+                paths.extend(receiver.try_iter().take(10));
+            }
+        }
+    }
+}
+
+impl App for FastFind {
+    fn update(&mut self, ctx: &Context, _: &mut Frame) {
+        CentralPanel::default().show(ctx, |ui| {
+            let text_edit = TextEdit::singleline(&mut self.input).hint_text("输入关键字");
+            if ui
+                .horizontal(|ui| ui.add_sized(ui.available_size(), text_edit))
+                .inner
+                .changed()
+            {
+                self.find(self.input.clone());
+            }
+
+            ui.separator();
+
+            self.sync();
+            match &self.index_state {
+                IndexState::Indxing(_) => {
+                    ui.label("索引中...");
+                }
+                IndexState::Ready {
+                    sender: _,
+                    receiver: _,
+                    paths,
+                } => {
+                    let height = ui.text_style_height(&TextStyle::Body);
+                    let total_rows = paths.len();
+                    ScrollArea::vertical().show_rows(ui, height, total_rows, |ui, range| {
+                        for path in &paths[range] {
+                            ui.label(path);
+                            ui.separator();
+                        }
+                    });
+                }
+            }
+        });
+    }
+}
+
+enum IndexState {
+    Indxing(Vec<JoinHandle<Result<(Volume, Index)>>>),
+    Ready {
+        sender: Sender<(String, Sender<String>)>,
+        receiver: Receiver<String>,
+        paths: Vec<String>,
+    },
+}
+
+impl Default for IndexState {
+    fn default() -> Self {
+        let drvs = scan_drivers();
+        let mut handles = Vec::with_capacity(drvs.len());
+        for drv in drvs {
+            let handle = spawn(move || {
+                let vol = Volume::open(drv)?;
+                let idx = Index::try_from_volume(&vol)?;
+                Ok((vol, idx))
+            });
+            handles.push(handle);
         }
 
-        for (vol, idx) in &mut drivers {
-            if let Err(e) = idx.sync(vol) {
-                error!("Index({:?}) 同步失败：{e}", idx.driver());
-            }
-            let mut stdout = stdout.lock();
-            for mut path in idx.find_iter(input) {
-                path.style(&style);
-                writeln!(stdout, "{}", path).unwrap();
-            }
-        }
+        Self::Indxing(handles)
     }
 }
