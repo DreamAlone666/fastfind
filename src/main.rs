@@ -1,6 +1,6 @@
 use anyhow::Result;
 use eframe::{
-    egui::{CentralPanel, Context, FontData, FontFamily, ScrollArea, TextEdit, TextStyle},
+    egui::{CentralPanel, Color32, Context, FontData, FontFamily, ScrollArea, TextEdit, TextStyle},
     epaint::text::{FontInsert, FontPriority, InsertFontFamily},
     App, Frame, NativeOptions,
 };
@@ -14,7 +14,7 @@ use std::{
     thread::{spawn, JoinHandle},
 };
 
-use ffd::{scan_drivers, Index, Volume};
+use ffd::{scan_drivers, FullPath, Index, Volume};
 
 fn main() -> eframe::Result {
     eframe::run_native(
@@ -77,7 +77,7 @@ impl FastFind {
                         .map(|h| h.join().unwrap().unwrap())
                         .collect();
 
-                    let (find_tx, find_rx) = channel::<(String, Sender<String>)>();
+                    let (find_tx, find_rx) = channel();
                     let (res_tx, res_rx) = channel();
                     find_tx.send((String::new(), res_tx)).unwrap();
                     spawn(move || loop {
@@ -90,7 +90,7 @@ impl FastFind {
                         'outer: for (vol, idx) in &mut drvs {
                             idx.sync(vol).unwrap();
                             for path in idx.find_iter(&sub) {
-                                if res_tx.send(path.to_string()).is_err() {
+                                if res_tx.send(path).is_err() {
                                     break 'outer;
                                 }
                             }
@@ -144,7 +144,13 @@ impl App for FastFind {
                     let total_rows = paths.len();
                     ScrollArea::vertical().show_rows(ui, height, total_rows, |ui, range| {
                         for path in &paths[range] {
-                            ui.label(path);
+                            let (prefix, sub, suffix) = path.split();
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing.x = 0.0;
+                                ui.label(prefix);
+                                ui.colored_label(Color32::RED, sub);
+                                ui.label(suffix);
+                            });
                             ui.separator();
                         }
                     });
@@ -157,9 +163,9 @@ impl App for FastFind {
 enum IndexState {
     Indxing(Vec<JoinHandle<Result<(Volume, Index)>>>),
     Ready {
-        sender: Sender<(String, Sender<String>)>,
-        receiver: Receiver<String>,
-        paths: Vec<String>,
+        sender: Sender<(String, Sender<FullPath>)>,
+        receiver: Receiver<FullPath>,
+        paths: Vec<FullPath>,
     },
 }
 
