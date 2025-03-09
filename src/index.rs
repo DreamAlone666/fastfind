@@ -8,7 +8,7 @@ use windows::Win32::System::Ioctl::{
 };
 
 use crate::ntfs::{UsnRecord, Volume};
-use find::FindIter;
+pub use find::{FindIter, FullPath};
 
 type V = (u64, Box<str>);
 

@@ -1,52 +1,29 @@
-use std::{
-    collections::hash_map::Values,
-    fmt::{Display, Write},
-    path::MAIN_SEPARATOR,
-};
-
 use memchr::memmem::Finder;
-use nu_ansi_term::Style;
+use std::{collections::hash_map::Values, fmt::Display, path::MAIN_SEPARATOR_STR};
 
 use super::Index;
 
-pub struct FullPath<'a> {
-    prefix: &'a str,
-    sub: &'a str,
-    suffix: &'a str,
-    index: &'a Index,
-    parent_frn: u64,
-    style: Option<&'a Style>,
+pub struct FullPath {
+    pub inner: String,
+    sub_start: usize,
+    sub_end: usize,
 }
 
-impl<'a> FullPath<'a> {
-    pub fn style(&mut self, style: &'a Style) {
-        self.style = Some(style);
+impl FullPath {
+    /// 将路径按照查找时的关键词分割为三个部分，
+    /// 其中中间的部分为匹配到的关键词。
+    pub fn split(&self) -> (&str, &str, &str) {
+        (
+            &self.inner[..self.sub_start],
+            &self.inner[self.sub_start..self.sub_end],
+            &self.inner[self.sub_end..],
+        )
     }
 }
 
-impl Display for FullPath<'_> {
+impl Display for FullPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut parts: Vec<&str> = Vec::new();
-        let mut frn = self.parent_frn;
-        while let Some((parent_frn, name)) = self.index.map.get(&frn) {
-            parts.push(name);
-            frn = *parent_frn;
-        }
-
-        parts.reverse();
-        f.write_str(self.index.driver())?;
-        f.write_char(MAIN_SEPARATOR)?;
-        for part in parts {
-            f.write_str(part)?;
-            f.write_char(MAIN_SEPARATOR)?;
-        }
-        f.write_str(self.prefix)?;
-        if let Some(s) = self.style {
-            write!(f, "{}", s.paint(self.sub))?;
-        } else {
-            f.write_str(self.sub)?;
-        }
-        f.write_str(self.suffix)
+        write!(f, "{}", self.inner)
     }
 }
 
@@ -69,19 +46,30 @@ impl<'a> FindIter<'a> {
 }
 
 impl<'a> Iterator for FindIter<'a> {
-    type Item = FullPath<'a>;
+    type Item = FullPath;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (parent_frn, name) = self.values.next()?;
             if let Some(mid) = self.finder.find(name.to_lowercase().as_bytes()) {
+                let mut parts: Vec<&str> = Vec::new();
+                let mut frn = *parent_frn;
+                while let Some((parent_frn, name)) = self.index.map.get(&frn) {
+                    parts.push(name);
+                    frn = *parent_frn;
+                }
+                parts.push(&self.index.driver);
+                parts.reverse();
+                parts.push(&name);
+
+                let path = parts.join(MAIN_SEPARATOR_STR);
+                let sub_start = path.len() - name.len() + mid;
+                let sub_end = sub_start + self.sub.len();
+
                 return Some(FullPath {
-                    prefix: &name[..mid],
-                    sub: &name[mid..(mid + self.sub.len())],
-                    suffix: &name[(mid + self.sub.len())..],
-                    index: self.index,
-                    parent_frn: *parent_frn,
-                    style: None,
+                    inner: path,
+                    sub_start,
+                    sub_end,
                 });
             }
         }
