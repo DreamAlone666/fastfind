@@ -1,5 +1,9 @@
 use memchr::memmem::Finder;
-use std::{collections::hash_map::Values, fmt::Display, path::MAIN_SEPARATOR_STR};
+use std::{
+    collections::hash_map::Values,
+    fmt::Display,
+    path::{Path, MAIN_SEPARATOR_STR},
+};
 
 use super::Index;
 
@@ -24,6 +28,12 @@ impl FullPath {
 impl Display for FullPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.inner)
+    }
+}
+
+impl AsRef<Path> for FullPath {
+    fn as_ref(&self) -> &Path {
+        Path::new(&self.inner)
     }
 }
 
