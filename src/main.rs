@@ -1,6 +1,9 @@
 use anyhow::Result;
 use eframe::{
-    egui::{CentralPanel, Color32, Context, FontData, FontFamily, ScrollArea, TextEdit, TextStyle},
+    egui::{
+        Align, CentralPanel, Color32, Context, FontData, FontFamily, Layout, ScrollArea, TextEdit,
+        TextStyle,
+    },
     epaint::text::{FontInsert, FontPriority, InsertFontFamily},
     App, Frame, NativeOptions,
 };
@@ -144,12 +147,27 @@ impl App for FastFind {
                     let total_rows = paths.len();
                     ScrollArea::vertical().show_rows(ui, height, total_rows, |ui, range| {
                         for path in &paths[range] {
-                            let (prefix, sub, suffix) = path.split();
-                            ui.horizontal_wrapped(|ui| {
-                                ui.spacing_mut().item_spacing.x = 0.0;
-                                ui.label(prefix);
-                                ui.colored_label(Color32::RED, sub);
-                                ui.label(suffix);
+                            let desired_size =
+                                (ui.available_width(), ui.style().spacing.interact_size.y).into();
+                            let layout = Layout::right_to_left(Align::Max);
+                            ui.allocate_ui_with_layout(desired_size, layout, |ui| {
+                                if ui.button("文件夹").clicked() {
+                                    opener::reveal(path).unwrap();
+                                };
+
+                                if ui.button("打开").clicked() {
+                                    opener::open(path.as_ref()).unwrap();
+                                }
+
+                                let layout =
+                                    Layout::left_to_right(Align::Center).with_main_wrap(true);
+                                ui.with_layout(layout, |ui| {
+                                    let (prefix, sub, suffix) = path.split();
+                                    ui.spacing_mut().item_spacing.x = 0.0;
+                                    ui.label(prefix);
+                                    ui.colored_label(Color32::RED, sub);
+                                    ui.label(suffix);
+                                });
                             });
                             ui.separator();
                         }
