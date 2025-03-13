@@ -3,24 +3,34 @@ name = "ffd"
 version = "0.3.0"
 edition = "2021"
 
+[[bench]]
+name = "benchmark"
+harness = false
+
+[profile.release]
+strip = "symbols"
+lto = "thin"
+
 [dependencies]
 anyhow = "1.0.94"
 log = "0.4.22"
 memchr = "2.7.4"
-windows = { version = "0.58.0", features = ["Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_WindowsProgramming"] }
+opener = { version = "0.7.2", features = ["reveal"] }
+
+[dependencies.windows]
+version = "0.58.0"
+features = [
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_WindowsProgramming"
+]
 
 [dependencies.eframe]
 version = "0.31.0"
 default-features = false
 features = ["glow"]
 
-[profile.release]
-strip = "symbols"
-lto = "thin"
-
 [dev-dependencies]
 criterion = "0.5.1"
-
-[[bench]]
-name = "benchmark"
-harness = false
