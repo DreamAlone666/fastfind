@@ -9,7 +9,7 @@ fn file_records_iter<const BS: usize>(vol: &Volume, n: usize) {
     let mut count = 0;
     for res in vol.file_records::<BS>().take(n) {
         res.unwrap();
-        count = count + 1;
+        count += 1;
     }
     assert_eq!(count, n);
 }

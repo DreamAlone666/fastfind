@@ -55,7 +55,7 @@ impl<'a> FindIter<'a> {
     }
 }
 
-impl<'a> Iterator for FindIter<'a> {
+impl Iterator for FindIter<'_> {
     type Item = FullPath;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -70,7 +70,7 @@ impl<'a> Iterator for FindIter<'a> {
                 }
                 parts.push(&self.index.driver);
                 parts.reverse();
-                parts.push(&name);
+                parts.push(name);
 
                 let path = parts.join(MAIN_SEPARATOR_STR);
                 let sub_start = path.len() - name.len() + mid;
