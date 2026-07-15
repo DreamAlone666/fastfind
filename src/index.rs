@@ -44,6 +44,10 @@ impl Index {
             .insert(record.frn, (record.parent_frn, record.filename.into()))
     }
 
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
     pub fn driver(&self) -> &str {
         &self.driver
     }
@@ -58,26 +62,25 @@ impl Index {
         for res in &mut usn_records {
             let record = res?;
             // 只匹配文件关闭时的事件
-            match record.reason ^ USN_REASON_CLOSE {
-                USN_REASON_FILE_CREATE => {
-                    debug!("Index({:?})：创建 {:?}", self.driver(), record.filename);
-                    self.insert(record);
+            if record.reason & USN_REASON_CLOSE == 0 {
+                continue;
+            }
+
+            if record.reason & USN_REASON_FILE_CREATE != 0 {
+                debug!("Index({:?})：创建 {:?}", self.driver(), record.filename);
+                self.insert(record);
+            } else if record.reason & USN_REASON_FILE_DELETE != 0 {
+                self.map.remove(&record.frn);
+                debug!("Index({:?})：删除 {:?}", self.driver(), record.filename);
+            } else if record.reason & USN_REASON_RENAME_NEW_NAME != 0 {
+                let frn = record.frn;
+                if let Some((_, old)) = self.insert(record) {
+                    debug!(
+                        "Index({:?})：重命名 {old:?} => {:?}",
+                        self.driver(),
+                        self.map[&frn].1
+                    );
                 }
-                USN_REASON_FILE_DELETE => {
-                    self.map.remove(&record.frn);
-                    debug!("Index({:?})：删除 {:?}", self.driver(), record.filename);
-                }
-                USN_REASON_RENAME_NEW_NAME => {
-                    let frn = record.frn;
-                    if let Some((_, old)) = self.insert(record) {
-                        debug!(
-                            "Index({:?})：重命名 {old:?} => {:?}",
-                            self.driver(),
-                            self.map[&frn].1
-                        );
-                    }
-                }
-                _ => {}
             }
         }
         self.usn = usn_records.next_usn();
