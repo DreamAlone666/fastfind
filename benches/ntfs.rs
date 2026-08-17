@@ -25,14 +25,17 @@ fn file_records_buf(c: &mut Criterion) {
     const N: usize = 10_0000;
     group.throughput(Throughput::Elements(N as _));
 
-    group.bench_function("4k", |b| {
-        b.iter(|| file_records_iter::<{ 4 * KB }>(&vol, N))
-    });
     group.bench_function("16k", |b| {
         b.iter(|| file_records_iter::<{ 16 * KB }>(&vol, N))
     });
+    group.bench_function("32k", |b| {
+        b.iter(|| file_records_iter::<{ 32 * KB }>(&vol, N))
+    });
     group.bench_function("64k", |b| {
         b.iter(|| file_records_iter::<{ 64 * KB }>(&vol, N))
+    });
+    group.bench_function("128k", |b| {
+        b.iter(|| file_records_iter::<{ 128 * KB }>(&vol, N))
     });
 
     group.finish();

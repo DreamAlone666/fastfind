@@ -39,7 +39,7 @@ impl Volume {
     }
 
     /// 基准测试中，64KB 缓冲区占优
-    pub fn file_records<const BS: usize>(&self) -> FileRecords<BS> {
+    pub fn file_records<const BS: usize>(&self) -> FileRecords<'_, BS> {
         FileRecords::new(self)
     }
 
@@ -47,7 +47,7 @@ impl Volume {
         UsnJournalData::try_new(self)
     }
 
-    pub fn usn_records_from<const BS: usize>(&self, id: u64, start: i64) -> UsnRecords<BS> {
+    pub fn usn_records_from<const BS: usize>(&self, id: u64, start: i64) -> UsnRecords<'_, BS> {
         UsnRecords::with_start(self, id, start)
     }
 
