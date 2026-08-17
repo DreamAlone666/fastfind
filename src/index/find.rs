@@ -42,6 +42,7 @@ pub struct FindIter<'a> {
     sub: &'a str,
     finder: Finder<'a>,
     values: Values<'a, u64, (u64, Box<str>)>,
+    lowered: String,
 }
 
 impl<'a> FindIter<'a> {
@@ -49,8 +50,9 @@ impl<'a> FindIter<'a> {
         Self {
             index,
             sub,
-            finder: Finder::new(&sub.to_lowercase()).into_owned(),
+            finder: Finder::new(&sub.to_ascii_lowercase()).into_owned(),
             values: index.map.values(),
+            lowered: String::new(),
         }
     }
 }
@@ -61,7 +63,11 @@ impl Iterator for FindIter<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (parent_frn, name) = self.values.next()?;
-            if let Some(mid) = self.finder.find(name.to_lowercase().as_bytes()) {
+            self.lowered.clear();
+            self.lowered.push_str(name);
+            self.lowered.make_ascii_lowercase();
+
+            if let Some(mid) = self.finder.find(self.lowered.as_bytes()) {
                 let mut parts: Vec<&str> = Vec::new();
                 let mut frn = *parent_frn;
                 while let Some((parent_frn, name)) = self.index.map.get(&frn) {
@@ -83,5 +89,69 @@ impl Iterator for FindIter<'_> {
                 });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FullPath, Index};
+    use std::collections::HashMap;
+
+    fn index_with_file(name: &str) -> Index {
+        let mut map: HashMap<u64, (u64, Box<str>)> = HashMap::new();
+        map.insert(1, (0, "dir".into()));
+        map.insert(2, (1, name.into()));
+
+        Index {
+            driver: "C:".into(),
+            map,
+            usn: 0,
+        }
+    }
+
+    fn find_one(name: &str, query: &str) -> FullPath {
+        index_with_file(name)
+            .find_iter(query)
+            .next()
+            .expect("expected a matching path")
+    }
+
+    #[test]
+    fn ascii_case_insensitive_matching() {
+        for (name, query, expected) in [
+            ("FOO.txt", "foo", "FOO"),
+            ("foo.txt", "FOO", "foo"),
+            ("FoO.txt", "fOo", "FoO"),
+        ] {
+            let path = find_one(name, query);
+            assert_eq!(path.split().1, expected);
+        }
+    }
+
+    #[test]
+    fn ascii_lowercase_preserves_offset_after_unicode_case_expansion() {
+        // U+0130 (İ) lowercases to `i` + U+0307 under Unicode case mapping,
+        // changing the byte offset of the following ASCII match.
+        let path = find_one("aİFOO.txt", "foo");
+        let (prefix, matched, suffix) = path.split();
+
+        assert!(prefix.ends_with("aİ"));
+        assert_eq!(matched, "FOO");
+        assert_eq!(suffix, ".txt");
+    }
+
+    #[test]
+    fn non_ascii_case_is_not_folded() {
+        let index = index_with_file("É.txt");
+        assert!(index.find_iter("é").next().is_none());
+
+        let index = index_with_file("é.txt");
+        assert!(index.find_iter("é").next().is_some());
+    }
+
+    #[test]
+    fn unmatched_query_returns_no_path() {
+        let index = index_with_file("bar.txt");
+        assert!(index.find_iter("foo").next().is_none());
     }
 }
