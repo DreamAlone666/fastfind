@@ -5,7 +5,11 @@ edition = "2021"
 build = "build.rs"
 
 [[bench]]
-name = "benchmark"
+name = "ntfs"
+harness = false
+
+[[bench]]
+name = "find"
 harness = false
 
 [profile.release]

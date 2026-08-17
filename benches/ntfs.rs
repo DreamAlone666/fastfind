@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion, SamplingMode, Throughput};
-use std::{sync::Arc, thread::spawn, time::Duration};
+use std::{thread::scope, time::Duration};
 
 use ffd::{scan_drivers, Volume};
 
@@ -18,7 +18,7 @@ fn file_records_buf(c: &mut Criterion) {
     let drv = scan_drivers().into_iter().next().unwrap();
     let vol = Volume::open(drv).unwrap();
 
-    let mut group = c.benchmark_group("file_records_buf");
+    let mut group = c.benchmark_group("ntfs/file_records/buf");
     group.sampling_mode(SamplingMode::Flat);
     group.sample_size(10);
     group.warm_up_time(Duration::from_secs(1));
@@ -42,10 +42,9 @@ fn file_records_threading(c: &mut Criterion) {
     let vols: Vec<_> = scan_drivers()
         .into_iter()
         .map(|drv| Volume::open(drv).unwrap())
-        .map(Arc::new)
         .collect();
 
-    let group_name = format!("file_records_threading/{}vols", vols.len());
+    let group_name = format!("ntfs/file_records/{}vols", vols.len());
     let mut group = c.benchmark_group(group_name);
     group.sampling_mode(SamplingMode::Flat);
     group.sample_size(10);
@@ -54,30 +53,21 @@ fn file_records_threading(c: &mut Criterion) {
     const BS: usize = 64 * KB;
     group.throughput(Throughput::Elements((N * vols.len()) as _));
 
-    fn f(vol: Arc<Volume>) {
-        file_records_iter::<BS>(&vol, N);
-    }
-
-    group.bench_function("single", |b| {
+    group.bench_function("serial", |b| {
         b.iter(|| {
             for vol in &vols {
-                f(vol.clone())
+                file_records_iter::<BS>(vol, N);
             }
         })
     });
 
-    group.bench_function("multi", |b| {
+    group.bench_function("parallel", |b| {
         b.iter(|| {
-            let mut handles = Vec::with_capacity(vols.len());
-            for vol in &vols {
-                let vol = Arc::clone(vol);
-                let handle = spawn(|| f(vol));
-                handles.push(handle);
-            }
-
-            for handle in handles {
-                handle.join().unwrap();
-            }
+            scope(|s| {
+                for vol in &vols {
+                    s.spawn(|| file_records_iter::<BS>(vol, N));
+                }
+            });
         })
     });
 
