@@ -4,6 +4,7 @@ version.workspace = true
 edition = "2024"
 
 [dependencies]
+thiserror = "2.0.20"
 windows-result = "0.4.1"
 
 [dependencies.windows]

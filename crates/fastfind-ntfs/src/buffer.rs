@@ -17,7 +17,7 @@ impl OutputBuffer {
     }
 
     pub(crate) fn as_mut_c_void(&mut self) -> *mut c_void {
-        self.0.as_mut_ptr() as _
+        self.0.as_mut_ptr().cast()
     }
 
     /// 设置缓冲区的有效长度。
@@ -41,11 +41,11 @@ impl OutputBuffer {
 
     /// 如果缓冲区有效长度足够，则返回第一个 u64，剩下的作为切片。
     pub fn split_first_u64(&self) -> Option<(u64, &[u8])> {
-        let (first, rest) = self.0.split_first()?;
+        let (&first, rest) = self.0.split_first()?;
         // SAFETY: Vec<u64> 字节长度永远是 8 的倍数
-        let rest = unsafe { std::slice::from_raw_parts(rest.as_ptr() as _, rest.len() * 8) };
+        let rest = unsafe { std::slice::from_raw_parts(rest.as_ptr().cast(), rest.len() * 8) };
 
-        Some((*first, rest))
+        Some((first, rest))
     }
 }
 

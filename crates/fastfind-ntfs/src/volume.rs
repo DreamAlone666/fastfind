@@ -8,6 +8,8 @@ use windows::Win32::{
     },
 };
 
+use crate::{buffer::OutputBuffer, enumerate::EnumUsnData};
+
 /// NTFS 卷。
 #[derive(Debug)]
 pub struct Volume {
@@ -21,6 +23,14 @@ impl Volume {
         ensure_ntfs_volume(&file)?;
 
         Ok(Self { file })
+    }
+
+    /// 基于 FSCTL_ENUM_USN_DATA 枚举每个文件的 USN 记录。
+    ///
+    /// 使用默认的缓冲区大小，如果需要配置，参考 [`EnumUsnData::with_capacity`]。
+    pub fn enum_usn_data(&self) -> EnumUsnData<'_> {
+        let out_buf = OutputBuffer::default();
+        EnumUsnData::new(self, out_buf)
     }
 }
 
@@ -45,7 +55,7 @@ fn ensure_ntfs_volume(handle: &impl AsRawHandle) -> Result<(), windows_result::E
             FSCTL_GET_NTFS_VOLUME_DATA,
             None,
             0,
-            Some(buf.as_mut_ptr() as _),
+            Some(buf.as_mut_ptr().cast()),
             size_of_val(&buf) as _,
             Some(bytes_returned.as_mut_ptr()),
             None,
