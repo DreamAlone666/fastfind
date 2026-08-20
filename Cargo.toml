@@ -4,6 +4,12 @@ version = "0.3.2"
 edition = "2021"
 build = "build.rs"
 
+[workspace]
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.3.2"
+
 [[bench]]
 name = "ntfs"
 harness = false
