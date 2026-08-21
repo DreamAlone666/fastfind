@@ -12,7 +12,11 @@ windows-result = "0.4.1"
 # > Using a range instead of the default Caret requirements helps avoid duplicate versions
 # in downstream graphs and improves resolver flexibility.
 version = ">=0.59, <=0.62"
-features = [
-    "Win32_System_IO",
-    "Win32_System_Ioctl",
-]
+features = ["Win32_System_IO", "Win32_System_Ioctl"]
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "enum_usn_data"
+harness = false
