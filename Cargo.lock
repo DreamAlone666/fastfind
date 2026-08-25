@@ -725,6 +725,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5d9305ccc6942a704f4335694ecd3de2ea531b114ac2d51f5f843750787a92f"
 
 [[package]]
+name = "fastfind"
+version = "0.3.2"
+dependencies = [
+ "anyhow",
+ "criterion 0.5.1",
+ "eframe",
+ "fastfind-ntfs",
+ "log",
+ "memchr",
+ "opener",
+ "windows 0.58.0",
+ "winresource",
+]
+
+[[package]]
 name = "fastfind-ntfs"
 version = "0.3.2"
 dependencies = [
@@ -742,20 +757,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
  "simd-adler32",
-]
-
-[[package]]
-name = "ffd"
-version = "0.3.2"
-dependencies = [
- "anyhow",
- "criterion 0.5.1",
- "eframe",
- "log",
- "memchr",
- "opener",
- "windows 0.58.0",
- "winresource",
 ]
 
 [[package]]

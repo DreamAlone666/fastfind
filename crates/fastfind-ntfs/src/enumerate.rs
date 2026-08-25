@@ -48,6 +48,23 @@ impl<'a> EnumUsnData<'a> {
 
 impl EnumUsnData<'_> {
     /// Lending Iterator 实现，配合 `while let` 使用。
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use std::error::Error;
+    /// # use fastfind_ntfs::volume::Volume;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// let volume = Volume::open(r"\\.\C:")?;
+    /// // 重要：必须存为变量，避免 `while let` 每轮重复创建迭代器导致进度重置
+    /// let mut iter = volume.enum_usn_data();
+    ///
+    /// while let Some(mut records) = iter.next_records()? {
+    ///     while let Some(record) = records.next_record() {
+    ///         println!("{}", record.file_name().to_string_lossy());
+    ///     }
+    /// }
+    /// ```
     pub fn next_records(&mut self) -> Result<Option<UsnRecords<'_>>, EnumUsnDataError> {
         let mut bytes_returned = MaybeUninit::uninit();
         unsafe {

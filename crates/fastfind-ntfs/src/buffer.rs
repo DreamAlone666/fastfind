@@ -5,6 +5,9 @@ use std::ffi::c_void;
 pub(crate) struct OutputBuffer(Vec<u64>);
 
 impl OutputBuffer {
+    /// 默认缓冲区大小，64 KB 在基准测试中占优
+    pub const DEFAULT_CAPACITY: usize = 64 * 1024;
+
     /// 构造至少 `bytes` 个字节的空缓冲区，向上取整直至 8 的倍数。
     pub(crate) fn with_capacity(bytes: usize) -> Self {
         let capacity = bytes.div_ceil(8);
@@ -51,8 +54,7 @@ impl OutputBuffer {
 
 impl Default for OutputBuffer {
     fn default() -> Self {
-        // 64 KB 在基准测试中占优
-        const CAPACITY: usize = 64 * 1024 / 8;
+        const CAPACITY: usize = OutputBuffer::DEFAULT_CAPACITY / 8;
         Self(Vec::with_capacity(CAPACITY))
     }
 }

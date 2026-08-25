@@ -175,6 +175,24 @@ impl ReadUsnJournal<'_> {
     ///
     /// 此函数尽力读到当前 USN 日志末尾，经过一段时间再调用可能会有新的数据（非幂等）。
     /// 过程中可能出现没有 USN 记录的缓冲区，不一定代表读到末尾，请以返回 [`None`] 为准。
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use std::error::Error;
+    /// # use fastfind_ntfs::volume::Volume;
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// let volume = Volume::open(r"\\.\C:")?;
+    /// let journal = volume.query_usn_journal()?;
+    /// // 重要：必须存为变量，避免 `while let` 每轮重复创建迭代器导致进度重置
+    /// let mut iter = volume.read_usn_journal(journal.next_cursor());
+    ///
+    /// while let Some(mut records) = iter.next_records()? {
+    ///     while let Some(record) = records.next_record() {
+    ///         println!("{}", record.file_name().to_string_lossy());
+    ///     }
+    /// }
+    /// ```
     pub fn next_records(&mut self) -> Result<Option<UsnRecords<'_>>, windows_result::Error> {
         let mut bytes_returned = MaybeUninit::uninit();
         unsafe {

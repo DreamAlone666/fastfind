@@ -2,7 +2,7 @@ use memchr::memmem::Finder;
 use std::{
     collections::hash_map::Values,
     fmt::Display,
-    path::{Path, MAIN_SEPARATOR_STR},
+    path::{MAIN_SEPARATOR_STR, Path},
 };
 
 use super::Index;
@@ -74,7 +74,7 @@ impl Iterator for FindIter<'_> {
                     parts.push(name);
                     frn = *parent_frn;
                 }
-                parts.push(&self.index.driver);
+                parts.push(&self.index.drive);
                 parts.reverse();
                 parts.push(name);
 
@@ -94,6 +94,8 @@ impl Iterator for FindIter<'_> {
 
 #[cfg(test)]
 mod tests {
+    use fastfind_ntfs::journal::JournalCursor;
+
     use super::{FullPath, Index};
     use std::collections::HashMap;
 
@@ -103,9 +105,9 @@ mod tests {
         map.insert(2, (1, name.into()));
 
         Index {
-            driver: "C:".into(),
+            drive: "C:".into(),
             map,
-            usn: 0,
+            cursor: JournalCursor::new(0, 0),
         }
     }
 

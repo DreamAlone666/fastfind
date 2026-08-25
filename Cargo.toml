@@ -1,7 +1,7 @@
 [package]
-name = "ffd"
+name = "fastfind"
 version = "0.3.2"
-edition = "2021"
+edition = "2024"
 build = "build.rs"
 
 [workspace]
@@ -24,6 +24,7 @@ lto = "thin"
 
 [dependencies]
 anyhow = "1.0.94"
+fastfind-ntfs = { path = "crates/fastfind-ntfs" }
 log = "0.4.22"
 memchr = "2.7.4"
 opener = { version = "0.7.2", features = ["reveal"] }
@@ -35,7 +36,7 @@ features = [
     "Win32_Storage_FileSystem",
     "Win32_System_IO",
     "Win32_System_Ioctl",
-    "Win32_System_WindowsProgramming"
+    "Win32_System_WindowsProgramming",
 ]
 
 [dependencies.eframe]

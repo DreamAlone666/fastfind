@@ -2,24 +2,25 @@
 
 use anyhow::Result;
 use eframe::{
+    App, Frame, NativeOptions,
     egui::{
         Align, CentralPanel, Color32, Context, FontData, FontFamily, Layout, ScrollArea, TextEdit,
         TextStyle,
     },
     epaint::text::{FontInsert, FontPriority, InsertFontFamily},
-    App, Frame, NativeOptions,
 };
+use fastfind_ntfs::volume::Volume;
 use std::{
     env,
     fs::File,
     io::{self, Read},
     mem::take,
     path::PathBuf,
-    sync::mpsc::{channel, Receiver, Sender},
-    thread::{spawn, JoinHandle},
+    sync::mpsc::{Receiver, Sender, channel},
+    thread::{JoinHandle, spawn},
 };
 
-use ffd::{scan_drivers, FullPath, Index, Volume};
+use fastfind::{FullPath, Index, discover_drives};
 
 fn main() -> eframe::Result {
     eframe::run_native(
@@ -85,18 +86,20 @@ impl FastFind {
                     let (find_tx, find_rx) = channel();
                     let (res_tx, res_rx) = channel();
                     find_tx.send((String::new(), res_tx)).unwrap();
-                    spawn(move || loop {
-                        let (sub, res_tx) = find_rx.recv().unwrap();
-                        // 空字符串不做搜索
-                        if sub.is_empty() {
-                            continue;
-                        }
+                    spawn(move || {
+                        loop {
+                            let (sub, res_tx) = find_rx.recv().unwrap();
+                            // 空字符串不做搜索
+                            if sub.is_empty() {
+                                continue;
+                            }
 
-                        'outer: for (vol, idx) in &mut drvs {
-                            idx.sync(vol).unwrap();
-                            for path in idx.find_iter(&sub) {
-                                if res_tx.send(path).is_err() {
-                                    break 'outer;
+                            'outer: for (vol, idx) in &mut drvs {
+                                idx.sync(vol).unwrap();
+                                for path in idx.find_iter(&sub) {
+                                    if res_tx.send(path).is_err() {
+                                        break 'outer;
+                                    }
                                 }
                             }
                         }
@@ -191,12 +194,12 @@ enum IndexState {
 
 impl Default for IndexState {
     fn default() -> Self {
-        let drvs = scan_drivers();
+        let drvs = discover_drives();
         let mut handles = Vec::with_capacity(drvs.len());
         for drv in drvs {
             let handle = spawn(move || {
-                let vol = Volume::open(drv)?;
-                let idx = Index::try_from_volume(&vol)?;
+                let vol = Volume::open(drv.as_volume_path())?;
+                let idx = Index::try_from_volume(&vol, drv.as_drive_path().into())?;
                 Ok((vol, idx))
             });
             handles.push(handle);

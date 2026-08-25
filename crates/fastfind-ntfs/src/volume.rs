@@ -8,7 +8,11 @@ use windows::Win32::{
     },
 };
 
-use crate::{buffer::OutputBuffer, enumerate::EnumUsnData, journal::UsnJournal};
+use crate::{
+    buffer::OutputBuffer,
+    enumerate::EnumUsnData,
+    journal::{JournalCursor, ReadUsnJournal, UsnJournal},
+};
 
 /// NTFS 卷。
 #[derive(Debug)]
@@ -27,15 +31,23 @@ impl Volume {
 
     /// 基于 FSCTL_ENUM_USN_DATA 枚举每个文件的 USN 记录。
     ///
-    /// 使用默认的缓冲区大小，如果需要配置，参考 [`EnumUsnData::with_capacity`]。
+    /// 使用默认的缓冲区大小，如果需要配置，参见 [`EnumUsnData::with_capacity`]。
+    /// 请将返回值存为变量后配合 `while let` 使用，参见 [`EnumUsnData::next_records`]。
     pub fn enum_usn_data(&self) -> EnumUsnData<'_> {
-        let out_buf = OutputBuffer::default();
-        EnumUsnData::new(self, out_buf)
+        EnumUsnData::with_capacity(self, OutputBuffer::DEFAULT_CAPACITY)
     }
 
-    /// 参加 [`UsnJournal::query`]。
+    /// 参见 [`UsnJournal::query`]。
     pub fn query_usn_journal(&self) -> Result<UsnJournal, windows_result::Error> {
         UsnJournal::query(self)
+    }
+
+    /// 基于 FSCTL_READ_USN_JOURNAL 分批读取 USN 日志。
+    ///
+    /// 使用默认的缓冲区大小，如果需要配置，参见 [`ReadUsnJournal::with_capacity`]。
+    /// 请将返回值存为变量后配合 `while let` 使用，参见 [`ReadUsnJournal::next_records`]。
+    pub fn read_usn_journal(&self, cursor: JournalCursor) -> ReadUsnJournal<'_> {
+        ReadUsnJournal::with_capacity(self, OutputBuffer::DEFAULT_CAPACITY, cursor)
     }
 }
 

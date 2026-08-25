@@ -1,7 +1,7 @@
-use criterion::{criterion_group, criterion_main, Criterion, SamplingMode, Throughput};
+use criterion::{Criterion, SamplingMode, Throughput, criterion_group, criterion_main};
 use std::{thread::scope, time::Duration};
 
-use ffd::{scan_drivers, Volume};
+use fastfind::{Volume, scan_drivers};
 
 const KB: usize = 1024;
 
