@@ -20,6 +20,8 @@ use crate::{
 pub type UsnJournalId = u64;
 
 /// USN 日志信息。
+///
+/// 仅代表当前时间点日志信息的快照，不进行实时同步。
 pub struct UsnJournal {
     inner: USN_JOURNAL_DATA_V0,
 }
@@ -53,6 +55,11 @@ impl UsnJournal {
         Ok(Self { inner })
     }
 
+    /// 返回从日志末尾读取的游标。
+    pub fn next_cursor(&self) -> JournalCursor {
+        JournalCursor::new(self.inner.UsnJournalID, self.inner.NextUsn)
+    }
+
     /// 日志标识符。
     pub fn usn_journal_id(&self) -> UsnJournalId {
         self.inner.UsnJournalID
@@ -68,10 +75,11 @@ impl UsnJournal {
         self.inner.NextUsn
     }
 
-    /// 日志自创建起第一条记录的 USN。
+    /// 日志自创建起写入的第一条记录的 USN。
     ///
-    /// [`EnumUsnData`](crate::enumerate::EnumUsnData) 可能返回低于此值的 USN，这说明日志或许经过重建（标识符不同）。
-    /// 无论如何这表明了日志存在中断，期间的 USN 记录已不可追溯。
+    /// 请不要和 [`Self::first_usn`] 混淆，由于滚动覆盖机制，此值可能小于第一条可读取的 USN。
+    /// [`EnumUsnData`](crate::enumerate::EnumUsnData) 也可能返回低于此值的 USN，这说明日志或许经过重建（标识符不同）。
+    /// 无论如何这都表明了日志存在中断，期间的 USN 记录已不可追溯。
     pub fn lowest_valid_usn(&self) -> Usn {
         self.inner.LowestValidUsn
     }
@@ -106,9 +114,9 @@ pub struct ReadUsnJournal<'a> {
     _marker: PhantomData<&'a Volume>,
 }
 
-impl ReadUsnJournal<'_> {
+impl<'a> ReadUsnJournal<'a> {
     /// 缓冲区大小至少为 `bytes` 个字节，且会向上取整至 8 的倍数。
-    pub fn with_capacity(volume: &Volume, capacity: usize, cursor: JournalCursor) -> Self {
+    pub fn with_capacity(volume: &'a Volume, capacity: usize, cursor: JournalCursor) -> Self {
         // https://learn.microsoft.com/zh-cn/windows/win32/api/winioctl/ns-winioctl-read_usn_journal_data_v0
         let in_buf = READ_USN_JOURNAL_DATA_V0 {
             UsnJournalID: cursor.journal_id,
@@ -146,9 +154,10 @@ impl ReadUsnJournal<'_> {
         self
     }
 
-    /// USN 记录结果返回的时机，开启此项后，结果一般只会是包含 [`UsnReasons::CLOSE`] 的记录。
+    /// USN 记录结果返回的时机。
     ///
-    /// 此项以记录写入的时机为条件，用于过滤掉中间记录，而只关心最终的关闭记录。
+    /// 开启后，只有在最终句柄关闭时才返回记录；
+    /// 返回记录的 Reason 通常包含 [`UsnReasons::CLOSE`]，并携带此前累积的其他原因标志。
     /// 请不要和 [`Self::reason_mask`] 混淆，此项可以与掩码搭配使用。
     pub fn only_on_close(&self) -> bool {
         self.in_buf.ReturnOnlyOnClose != 0

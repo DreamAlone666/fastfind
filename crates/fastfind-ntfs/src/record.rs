@@ -13,6 +13,7 @@ use windows::Win32::System::Ioctl::{
 };
 
 pub type Usn = i64;
+pub type FileReferenceNumber = u64;
 
 /// 一批 USN 记录的迭代器，通常借用自缓冲区。
 #[derive(Debug, Clone)]
@@ -106,6 +107,21 @@ impl<'a> UsnRecordView<'a> {
     /// 自文件或目录打开以来在此记录中累积的更改原因标志。
     pub fn reasons(&self) -> UsnReasons {
         UsnReasons::from_bits_retain(self.inner.Reason)
+    }
+
+    /// 此记录对应的文件或目录的序号。
+    pub fn file_reference_number(&self) -> FileReferenceNumber {
+        self.inner.FileReferenceNumber
+    }
+
+    /// 此记录对应的文件所在目录，或目录的父目录的序号。
+    pub fn parent_file_reference_number(&self) -> FileReferenceNumber {
+        self.inner.ParentFileReferenceNumber
+    }
+
+    /// 此记录的 USN。
+    pub fn usn(&self) -> Usn {
+        self.inner.Usn
     }
 }
 
