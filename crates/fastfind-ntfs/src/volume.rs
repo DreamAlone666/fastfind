@@ -8,7 +8,7 @@ use windows::Win32::{
     },
 };
 
-use crate::{buffer::OutputBuffer, enumerate::EnumUsnData};
+use crate::{buffer::OutputBuffer, enumerate::EnumUsnData, journal::UsnJournal};
 
 /// NTFS 卷。
 #[derive(Debug)]
@@ -31,6 +31,11 @@ impl Volume {
     pub fn enum_usn_data(&self) -> EnumUsnData<'_> {
         let out_buf = OutputBuffer::default();
         EnumUsnData::new(self, out_buf)
+    }
+
+    /// 参加 [`UsnJournal::query`]。
+    pub fn query_usn_journal(&self) -> Result<UsnJournal, windows_result::Error> {
+        UsnJournal::query(self)
     }
 }
 

@@ -14,7 +14,7 @@ fn drain_records(iter: &mut EnumUsnData<'_>, limit: usize) -> (usize, usize, usi
     let mut bytes = 0;
 
     while records < limit {
-        let Some(mut buffer) = iter.next_buffer().expect("`next_buffer` should work") else {
+        let Some(mut buffer) = iter.next_records().expect("`next_buffer` should work") else {
             break;
         };
         buffers += 1;
