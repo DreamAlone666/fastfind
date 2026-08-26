@@ -9,14 +9,11 @@ thiserror = "2.0.20"
 windows-result = "0.4.1"
 
 [dependencies.windows]
-# https://crates.io/crates/windows/0.62.2
-# > Using a range instead of the default Caret requirements helps avoid duplicate versions
-# in downstream graphs and improves resolver flexibility.
-version = ">=0.59, <=0.62"
+workspace = true
 features = ["Win32_System_IO", "Win32_System_Ioctl"]
 
 [dev-dependencies]
-criterion = "0.8.2"
+criterion = { workspace = true }
 
 [[bench]]
 name = "enum_usn_data"
