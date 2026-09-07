@@ -21,6 +21,10 @@ build = "build.rs"
 name = "find"
 harness = false
 
+[[bench]]
+name = "enum_usn_data"
+harness = false
+
 [profile.release]
 strip = "symbols"
 lto = "thin"
